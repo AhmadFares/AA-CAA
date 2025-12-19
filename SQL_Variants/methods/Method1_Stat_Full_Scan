@@ -1,0 +1,93 @@
+# sql_methods/methods/method1_full_scan.py
+
+import time
+import pandas as pd
+from helpers.id_utils import detect_id_column
+
+from SQL_Variants.core.utils import (
+    ur_df_to_dict,
+    restrict_to_UR_columns,
+    compute_overall_coverage_dict,
+    compute_overall_penalty_dict,
+)
+from SQL_Variants.core.Algos import (
+    coverage_guided_selection,
+    redundancy_pruning,
+)
+
+
+def Full_Scan(con, UR_df, table_names, theta):
+
+    sources_explored = 0
+    shipping_time_total = 0.0
+    shipping_rows_total = 0
+    local_time_total = 0.0
+
+    # Convert UR DataFrame → dict {col: [values]}
+    UR = ur_df_to_dict(UR_df)
+
+    T = None
+    id_col = None
+
+    # -------------------------------
+    # Iterate sources S1, S2, ...
+    # -------------------------------
+    for table_name in table_names:
+        sources_explored += 1
+
+        # SHIPPING COST
+        sql_start = time.perf_counter()
+        S = con.execute(f"SELECT * FROM {table_name}").fetchdf()
+        sql_time = time.perf_counter() - sql_start
+
+        shipping_time_total += sql_time
+        shipping_rows_total += len(S)
+
+        # Detect ID column once, from first S
+        if id_col is None:
+            id_col = detect_id_column(S)
+
+        # LOCAL PROCESSING
+        local_start = time.perf_counter()
+
+        # Keep UR columns + ID
+        S = restrict_to_UR_columns(S, UR)
+
+        # Coverage-Guided Selection
+        S = coverage_guided_selection(S, UR)
+
+        # Initialize T after knowing id_col
+        if T is None:
+            cols = list(UR.keys()) + ([id_col] if id_col else [])
+            T = pd.DataFrame(columns=cols)
+
+        # Add rows into T
+        if not S.empty:
+            T = pd.concat([T, S], ignore_index=True)
+
+        # Compute current coverage & penalty
+        cov, _ = compute_overall_coverage_dict(T, UR)
+        pen, _ = compute_overall_penalty_dict(T, UR)
+
+        local_time_total += time.perf_counter() - local_start
+
+        # STOP if perfect
+        if cov >= theta and pen == 0:
+            T = redundancy_pruning(T, UR)
+            break
+
+    # FINAL redundancy pruning
+    if T is not None and not T.empty:
+        local_start = time.perf_counter()
+        T = redundancy_pruning(T, UR)
+        local_time_total += time.perf_counter() - local_start
+
+    # Stats
+    stats = {
+        "sources_explored": sources_explored,
+        "shipping_time_total": shipping_time_total,
+        "shipping_rows_total": shipping_rows_total,
+        "local_time_total": local_time_total,
+    }
+
+    return T, stats
