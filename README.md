@@ -1,6 +1,6 @@
 # TVD
 
-# — Codebase Overview
+# Codebase Overview
 
 This repository contains the **experimental and algorithmic code** for running **Tuple-Value Discovery (TVD)** methods and evaluating them under different source construction settings.
 
