@@ -13,7 +13,7 @@ TEST_CASES = TestCases()
 GENERATED_SPLITS_FOLDER = "data/generated_splits"
 
 
-def load_ur_and_base_table(ur_id):
+def load_ur(ur_id):
     """
     Return (T, UR) dataframes from TestCases.Example: 20 -> (T, UR)
     """

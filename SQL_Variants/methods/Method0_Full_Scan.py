@@ -1,4 +1,4 @@
-# sql_methods/methods/method1_full_scan.py
+# SQL_Variants/methods/Method0_Full_Scan.py
 
 import time
 import pandas as pd
@@ -8,11 +8,11 @@ from SQL_Variants.core.utils import (
     ur_df_to_dict,
     restrict_to_UR_columns,
     compute_overall_coverage_dict,
-    compute_overall_penalty_dict,
+    compute_penalty,
 )
 from SQL_Variants.core.Algos import (
     coverage_guided_selection,
-    redundancy_pruning,
+    EPrune,
 )
 
 
@@ -127,21 +127,22 @@ def Full_Scan(con, UR_df, table_names, theta, stats=None):
                     already_covered.add((col, val))
 
         cov, _ = compute_overall_coverage_dict(T, UR)
-        pen, _ = compute_overall_penalty_dict(T, UR)
+        pen, _ = compute_penalty(T, UR)
 
         local_time_total += time.perf_counter() - local_start
 
-        # perfect
+        # Stopping condition
         if cov >= theta and pen == 0:
-            T = redundancy_pruning(T, UR)
+            prune_start = time.perf_counter()
+            T = EPrune(T, UR)
+            local_time_total += time.perf_counter() - prune_start
             break
-
     # ------------------------------------------------------------
     # FINAL pruning
     # ------------------------------------------------------------
     if T is not None and not T.empty:
         local_start = time.perf_counter()
-        T = redundancy_pruning(T, UR)
+        T = EPrune(T, UR)
         local_time_total += time.perf_counter() - local_start
 
     stats = {
