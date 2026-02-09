@@ -19,3 +19,4 @@ Analysis/
 *.ipynb
 *.html
 tus_candidates_UR21-UR40.tar.gz
+movielens_1m.csv.tar.gz
