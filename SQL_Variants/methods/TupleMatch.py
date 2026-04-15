@@ -55,7 +55,7 @@ def SourceSelectionTM(UR, remaining_sources, stats):
 # ------------------------------------------------------------
 def Tuple_Match(
     con, UR, table_names, theta,
-    stats=None, mode="tvd-exi", trace_enabled=True,
+    stats=None, mode="tvd-av", trace_enabled=True,
     all_source=False, rewrite_sql=False,
 ):
     if all_source:
@@ -75,7 +75,7 @@ def Tuple_Match(
     prev_proc_t = 0.0
 
     T = None
-    T_index = TIndexAllLevels(UR) if mode == "tvd-uni" else None
+    T_index = TIndexAllLevels(UR) if mode == "tvd-aa" else None
     id_col = None
 
     remaining_sources = list(enumerate(table_names))
@@ -195,12 +195,12 @@ def Tuple_Match(
 
         if not S_rows.empty:
             T = pd.concat([T, S_rows], ignore_index=True).drop_duplicates()
-            if mode == "tvd-uni" and stats is not None:
-                T_index.update_from_rows(S_rows, min_matches=2)
+            if mode == "tvd-aa" and stats is not None:
+                T_index.update_from_rows(S_rows, min_matches=1)  # NEW CHANGE WAS NOT IN OLD PAPER: was min_matches=2; single-attribute rows must be tracked so T_index baseline matches compute_ucoverage, preventing false-negative gain estimates
 
         # stopping condition 
         if not all_source:
-            if mode == "tvd-uni":
+            if mode == "tvd-aa":
                 cov = compute_ucoverage(T, UR)
             else:
                 cov, _ = compute_ecoverage(T, UR)
@@ -214,7 +214,7 @@ def Tuple_Match(
     # ---- FINAL PRUNING + TRACE ROW ----
     if T is not None and not T.empty:
         prune_start = time.perf_counter()
-        if mode == "tvd-uni":
+        if mode == "tvd-aa":
             T = UPrune(T, UR)
         else:
             T = EPrune(T, UR)

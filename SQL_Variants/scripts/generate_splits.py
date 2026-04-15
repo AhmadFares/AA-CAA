@@ -157,7 +157,8 @@ def generate_dataset_level_splits(dataset_name, T):
     dataset_root = os.path.join(OUTPUT_ROOT, dataset_name)
 
     # IMPORTANT CHANGE: dataset-level stats are based on union of URs for that dataset
-    UR_df_all = _build_union_UR_df_for_dataset(dataset_name)
+    # UR_df_all = _build_union_UR_df_for_dataset(dataset_name)
+    UR_df_all = T.copy()
     if UR_df_all.empty:
         print(f"  [WARN] No URs found for dataset={dataset_name}. Dataset-level stats will be skipped.")
     else:
@@ -280,7 +281,7 @@ def generate_all_splits():
 
     # 1) Dataset-level splits → once per dataset
     for ur_id in GENERAL_CONFIG["URs"]:
-        dataset = dataset_from_ur_id(ur_id)
+        dataset = "MATHE" # dataset_from_ur_id(ur_id)
         if dataset == "UNKNOWN":
             continue
 
@@ -291,7 +292,7 @@ def generate_all_splits():
 
     # 2) UR-dependent splits → per UR
     for ur_id in GENERAL_CONFIG["URs"]:
-        dataset = dataset_from_ur_id(ur_id)
+        dataset = "MATHE" # dataset_from_ur_id(ur_id)
         if dataset == "UNKNOWN":
             continue
 

@@ -313,6 +313,97 @@ def UPrune(T: pd.DataFrame, UR: dict) -> pd.DataFrame:
 
 
 
+def CAAprune(T: pd.DataFrame, UR: dict) -> pd.DataFrame:
+    """
+    CAAprune — pruning for Counter Attribute Association (CAA) mode.
+
+    Goal: keep a minimal set of rows that covers every requested (a,v) pair
+    (AVCov), while maximising diversity of unrequested values so each selected
+    row reveals a distinct unexpected association.
+
+    Strategy (mirrors the pseudocode):
+      1. Sort rows by increasing number of matched UR values (fewest first).
+      2. First pass: greedily add rows whose unrequested values are entirely
+         fresh (unreq ∩ seen_unreq = ∅).  Others go to a buffer.
+      3. Second pass: for each still-uncovered (a,v), pick the buffer row
+         covering it with the smallest overlap with seen_unreq, then update
+         seen_unreq and remove the row from the buffer.
+    """
+    if T is None or T.empty:
+        return T
+
+    attrs = list(UR.keys())
+    ur_sets = {a: set(vals) for a, vals in UR.items()}
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+    def req(row):
+        """Set of (a,v) UR pairs present in this row."""
+        return frozenset(
+            (a, row[a]) for a in attrs
+            if a in row.index and row[a] in ur_sets[a]
+        )
+
+    def unreq(row):
+        """Set of (a,v) non-UR pairs present in this row (penalty values)."""
+        result = set()
+        for a in row.index:
+            v = row[a]
+            if pd.isna(v):
+                continue
+            if a not in ur_sets or v not in ur_sets[a]:
+                result.add((a, v))
+        return result
+
+    # ── sort by increasing number of matched UR values ────────────────────────
+    T_work = T.reset_index(drop=True).copy()
+    T_work["_req_count"] = T_work.apply(lambda row: len(req(row)), axis=1)
+    T_sorted = T_work.sort_values("_req_count", ascending=True, kind="mergesort")
+    T_sorted = T_sorted.drop(columns="_req_count")
+    T_work   = T_work.drop(columns="_req_count")
+
+    # ── initialise ────────────────────────────────────────────────────────────
+    uncovered  = {(a, v) for a, vals in UR.items() for v in vals}
+    seen_unreq = set()
+    selected   = []   # indices into T_work
+    buffer     = []   # (idx, req_set, unreq_set)
+
+    # ── first pass ────────────────────────────────────────────────────────────
+    for idx, row in T_sorted.iterrows():
+        if not uncovered:
+            break
+
+        r = req(row)
+        if not (r & uncovered):          # covers nothing new → skip
+            continue
+
+        u = unreq(row)
+        if not (u & seen_unreq):         # all unrequested values are fresh
+            selected.append(idx)
+            uncovered  -= r
+            seen_unreq |= u
+        else:
+            buffer.append((idx, r, u))
+
+    # ── second pass (buffer fallback) ─────────────────────────────────────────
+    for av in list(uncovered):           # iterate over snapshot
+        if av not in uncovered:          # already covered by a previous best
+            continue
+
+        # find buffer row covering av with fewest already-seen unreq values
+        candidates = [(idx, r, u) for (idx, r, u) in buffer if av in r]
+        if not candidates:
+            continue                     # implementation should ensure this never happens
+
+        best_idx, best_r, best_u = min(candidates, key=lambda x: len(x[2] & seen_unreq))
+
+        selected.append(best_idx)
+        uncovered  -= best_r
+        seen_unreq |= best_u
+        buffer      = [(i, r, u) for (i, r, u) in buffer if i != best_idx]
+
+    return T_work.loc[selected].reset_index(drop=True)
+
+
 def check_case(name, T, UR):
     uc0, _ = compute_ecoverage(T, UR)
     Tp = EPrune(T, UR)

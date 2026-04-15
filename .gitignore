@@ -14,7 +14,11 @@ __pycache__/
 
 data/
 *.csv
-Analysis/
+# Analysis outputs (regenerable) — keep .py scripts tracked
+Analysis/*.png
+Analysis/*.pdf
+Analysis/*.html
+Analysis/*.ipynb
 *.pdf
 *.ipynb
 *.html

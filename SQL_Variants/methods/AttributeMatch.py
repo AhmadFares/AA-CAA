@@ -34,7 +34,7 @@ def SourceSelectionM1(UR, T, theta,remaining_sources, stats, mode, T_index=None)
     if not remaining_sources:
         return None, 0
 
-    if mode == "tvd-uni":
+    if mode == "tvd-aa":
         cov_T = compute_ucoverage(T, UR) if (T is not None and not T.empty) else 0.0
     else:
         cov_T, _ = compute_ecoverage(T, UR)
@@ -44,7 +44,7 @@ def SourceSelectionM1(UR, T, theta,remaining_sources, stats, mode, T_index=None)
     
     for src_idx, table_name in remaining_sources:
        if cov_T < theta:
-            if mode == "tvd-uni":
+            if mode == "tvd-aa":
                 cov_T_plus = ucoverage_after_source_stats(T_index, UR, src_idx, stats)
             else:
                 cov_T_plus = ecoverage_after_source_stats(T, UR, src_idx, stats)
@@ -82,8 +82,8 @@ def SourceSelectionM1(UR, T, theta,remaining_sources, stats, mode, T_index=None)
 
 def Attribute_Match(
     con, UR, table_names, theta,
-    stats=None, mode="tvd-exi",trace_enabled=True,
-    all_source=False, rewrite_sql=False
+    stats=None, mode="tvd-av",trace_enabled=True,
+    all_source=False, rewrite_sql=False,
 ):
     if all_source:
         assert stats is None, "All-Source must not be used with stats"
@@ -102,7 +102,7 @@ def Attribute_Match(
     prev_proc_t = 0.0
 
     T = None
-    T_index = TIndexAllLevels(UR) if mode == "tvd-uni" else None
+    T_index = TIndexAllLevels(UR) if mode == "tvd-aa" else None
     id_col = None
 
     remaining_sources = list(enumerate(table_names))
@@ -228,29 +228,27 @@ def Attribute_Match(
 
         if not S_rows.empty:
             T = pd.concat([T, S_rows], ignore_index=True).drop_duplicates()
-            if mode == "tvd-uni" and stats is not None:
-                T_index.update_from_rows(S_rows, min_matches=2)
-
-        # stopping condition (unchanged)
-        if pen == 0 and not all_source:
-            pen, _ = compute_penalty(T, UR)
-            if pen == 0:
-                if mode == "tvd-uni":
-                    cov = compute_ucoverage(T, UR)
-                else:
-                    cov, _ = compute_ecoverage(T, UR)
-                if cov >= theta and pen == 0:
-                    processing_time_total += time.perf_counter() - local_start
-                    record_step(table_name)   # record BEFORE break
-                    break
+            if mode == "tvd-aa" and stats is not None:
+                T_index.update_from_rows(S_rows, min_matches=1)  # NEW CHANGE WAS NOT IN OLD PAPER: was min_matches=2; single-attribute rows must be tracked so T_index baseline matches compute_ucoverage, preventing false-negative gain estimates
 
         processing_time_total += time.perf_counter() - local_start
-        record_step(table_name)  # record at normal end of iteration
+        record_step(table_name)
+
+        # stopping condition — NEW CHANGE WAS NOT IN OLD PAPER: removed pen==0 requirement, stop when cov>=theta only
+        # reuse ucoverage already computed inside record_step to avoid a second expensive call;
+        # if tracing is off, fall back to computing it directly
+        if not all_source:
+            if trace:
+                cov = trace[-1]["ucoverage_current"]
+            else:
+                cov = compute_ucoverage(T, UR) if mode == "tvd-aa" else compute_ecoverage(T, UR)[0]
+            if cov >= theta:
+                break
 
     # ---- FINAL PRUNING + TRACE ROW ----
     if T is not None and not T.empty:
         prune_start = time.perf_counter()
-        if mode == "tvd-uni":
+        if mode == "tvd-aa":
             T = UPrune(T, UR)
         else:
             T = EPrune(T, UR)

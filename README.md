@@ -175,10 +175,6 @@ Runs all configured experiments and logs metrics for analysis.
 ## Notes
 
 * This codebase focuses on **TVD methods only**.
-* Naming conventions:
-
-  * `TVD-AA` = former `tvd-uni`
-  * `TVD-AV` = former `tvd-exi`
 
 ---
 
