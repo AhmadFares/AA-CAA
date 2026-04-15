@@ -41,7 +41,7 @@ class TestCases:
         Load MATHE and use a fixed User Request (UR) across 3 columns.
         """
         if csv_path is None:
-            csv_path = os.path.join(BASE_DIR, "data/MATHE/output_table.csv")
+            csv_path = os.path.join(BASE_DIR, "data/raw/MATHE/output_table.csv")
 
         mathe_df = pd.read_csv(csv_path, delimiter=";")
         def detect_id_column(df):
@@ -180,7 +180,7 @@ class TestCases:
         import pandas as pd
 
         # if csv_path is None:
-        #     csv_path = os.path.join(BASE_DIR, "data/Movie_Lens/movielens-1m-full.csv")
+        #     csv_path = os.path.join(BASE_DIR, "data/raw/Movie_Lens/movielens-1m-full.csv")
 
         # df = pd.read_csv(csv_path)
         # df["synthetic_id"] = df["UserID"].astype(str) + "_" + df["MovieID"].astype(str)

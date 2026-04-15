@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
 
-STEPS_CSV = "data/experiment_results/nopen/steps.csv"
+STEPS_CSV = "results/nopen/steps.csv"
 OUT_DIR   = "Analysis"
 
 df    = pd.read_csv(STEPS_CSV)

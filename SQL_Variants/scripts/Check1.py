@@ -127,7 +127,7 @@ def run_sql_method_once(method_func, UR, parquet_paths, theta, stats=None, mode=
 # SINGLE RUN (EDIT THESE)
 # ------------------------------------------------------------
 DATASET_NAME = "MATHE"
-BASE_SPLITS = "/Users/faresa/Desktop/TVD/data/generated_splits"
+BASE_SPLITS = "data/generated_splits"
 UR_ID = GENERAL_CONFIG["URs"][0]         
 THETA = GENERAL_CONFIG["thetas"][0]      
 SPLIT_NAME = GENERAL_CONFIG["source_splits"][2] 

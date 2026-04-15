@@ -13,6 +13,7 @@ __pycache__/
 .DS_Store
 
 data/
+results/
 *.csv
 # Analysis outputs (regenerable) — keep .py scripts tracked
 Analysis/*.png

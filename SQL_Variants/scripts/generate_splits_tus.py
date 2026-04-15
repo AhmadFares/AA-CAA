@@ -103,8 +103,8 @@ def generate_tus_splits_for_one_ur(
 if __name__ == "__main__":
     UR_ID = [21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40]
     for ur in UR_ID:
-        candidates_dir = f"/home/slide/faresa/TVD/data/tus_20_selected/candidates/UR{ur}"
-        out_root = f"/home/slide/faresa/TVD/data/generated_splits/UR{ur}"
+        candidates_dir = f"data/raw/tus_20_selected/candidates/UR{ur}"
+        out_root = f"data/generated_splits/UR{ur}"
         UR_df = load_ur(ur) 
 
         generate_tus_splits_for_one_ur(ur, candidates_dir, out_root, UR_df, do_stats=True)

@@ -25,7 +25,7 @@ from SQL_Variants.core.utils import (
 )
 
 JOB_TAG = os.environ.get("JOB_TAG", "default")
-RESULTS_DIR = os.path.join("data", "experiment_results", JOB_TAG)
+RESULTS_DIR = os.path.join("results", JOB_TAG)
 os.makedirs(RESULTS_DIR, exist_ok=True)
 SUMMARY_PATH = os.path.join(RESULTS_DIR, "summary.csv")
 STEPS_PATH = os.path.join(RESULTS_DIR, "steps.csv")
