@@ -96,7 +96,7 @@ def load_stats(split_path):
 
     return {"value_index": value_index, "source_vectors": source_vectors}
 
-def run_sql_method_once(method_func, UR, parquet_paths, theta, stats=None, mode="tvd-exi", all_source = True, rewrite_sql = False):
+def run_sql_method_once(method_func, UR, parquet_paths, theta, stats=None, mode="tvd-av", all_source = True, rewrite_sql = False):
     
     t0 = t()
     con = get_connection()
@@ -126,14 +126,14 @@ def run_sql_method_once(method_func, UR, parquet_paths, theta, stats=None, mode=
 # ------------------------------------------------------------
 # SINGLE RUN (EDIT THESE)
 # ------------------------------------------------------------
-DATASET_NAME = "TUS"
+DATASET_NAME = "MATHE"
 BASE_SPLITS = "/Users/faresa/Desktop/TVD/data/generated_splits"
-UR_ID = GENERAL_CONFIG["URs"][29]         
+UR_ID = GENERAL_CONFIG["URs"][0]         
 THETA = GENERAL_CONFIG["thetas"][0]      
 SPLIT_NAME = GENERAL_CONFIG["source_splits"][2] 
 SOURCE_NUMBER = GENERAL_CONFIG["source_numbers"][1]
 USE_STATS = False      
-MODE = "tvd-uni"
+MODE = "tvd-aa"
 METHODS = {
   "AM": Attribute_Match,
   "TM": Tuple_Match,

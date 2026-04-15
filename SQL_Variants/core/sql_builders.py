@@ -50,10 +50,10 @@ def reformualte_sql(
     """
     Reformulated OR-over-columns SQL.
 
-    tvd-exi:
+    tvd-av:
       remove (col,value) if it appears in at least one CLEAN row.
 
-    tvd-uni (exact):
+    tvd-aa (exact):
       remove (col,value) if it appears in all required Cartesian
       combinations, i.e., exactly Π_{d≠col} |UR[d]| times in CLEAN rows.
     """
@@ -94,9 +94,9 @@ def reformualte_sql(
             counts[c][tup[i]] += 1
 
     # =========================
-    # tvd-exi: value seen once is enough
+    # tvd-av: value seen once is enough
     # =========================
-    if mode == "tvd-exi":
+    if mode == "tvd-av":
         reduced_UR = {}
         for c in cols:
             remaining = [v for v in UR[c] if counts[c][v] == 0]
@@ -113,7 +113,7 @@ def reformualte_sql(
   
 
     # =========================
-    # tvd-uni (exact): value must appear x times
+    # tvd-aa (exact): value must appear x times
     # =========================
     # x(c) = product of sizes of other columns
     required = {}

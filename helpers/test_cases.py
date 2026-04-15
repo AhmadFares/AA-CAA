@@ -1,7 +1,7 @@
+from duckdb import df
 import pandas as pd
 import sqlite3
 import os
-from helpers.id_utils import detect_id_column
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
@@ -16,9 +16,10 @@ class TestCases:
 
     def __init__(self):
         self.cases = {}
-       # self.load_fixed_mathe_case()  # Load MATHE case
+        self.load_fixed_mathe_case()  # Load MATHE case
         self.load_fixed_movielens_case()  # Load fixed MovieLens case
         self.load_fixed_tus_case()
+        self.load_scalability_cases()  # Load scalability URs (101-107, 111-120)
 
    
     def create_flexible_dataframe(self, data_dict):
@@ -33,127 +34,136 @@ class TestCases:
             }
         )
 
+    
    
-   
-    # def load_fixed_mathe_case(self, csv_path=None):
-    #     """
-    #     Load MATHE and use a fixed User Request (UR) across 3 columns.
-    #     """
+    def load_fixed_mathe_case(self, csv_path=None):
+        """
+        Load MATHE and use a fixed User Request (UR) across 3 columns.
+        """
+        if csv_path is None:
+            csv_path = os.path.join(BASE_DIR, "data/MATHE/output_table.csv")
 
-    #     if csv_path is None:
-    #         csv_path = os.path.join(BASE_DIR, "data/MATHE/output_table.csv")
+        mathe_df = pd.read_csv(csv_path, delimiter=";")
+        def detect_id_column(df):
+            candidates = [
+                "Identifiant",
+                "id_assessment",
+                "synthetic_id",
+            ]
+            for col in candidates:
+                if col in df.columns:
+                    return col
+            return None
+        id_col = detect_id_column(mathe_df)
 
-    #     mathe_df = pd.read_csv(csv_path, delimiter=";")
-    #     id_col = detect_id_column(mathe_df)
+        UR_Deep_1 = {
+            "keyword_name": [
+                "Two variables",
+                "Orthogonality",
+                "Three points rule",
+                "Mean",
+            ],
+            "topic_name": [
+                "Linear Algebra",
+                "Probability",
+                "Optimization",
+                "Discrete Mathematics",
+            ],
+            "subtopic_name": [
+                "Linear Transformations",
+                "Vector Spaces",
+                "Algebraic expressions, Equations, and Inequalities",
+                "Triple Integration",
+            ],
+        }
+        UR_Deep_2 = {
+            "keyword_name": [
+                "Matrix of a linear transformation",
+                "Triangles",
+                "Event",
+                "Roots of a function",
+            ],
+            "topic_name": [
+                "Real Functions of Several Variables",
+                "Optimization",
+                "Real Functions of a Single Variable",
+                "Graph Theory",
+            ],
+            "subtopic_name": [
+                "Double Integration",
+                "Triple Integration",
+                "Derivatives",
+                "Domain, Image and Graphics",
+            ],
+        }
 
-    #     UR_Deep_1 = {
-    #         "keyword_name": [
-    #             "Two variables",
-    #             "Orthogonality",
-    #             "Three points rule",
-    #             "Mean",
-    #         ],
-    #         "topic_name": [
-    #             "Linear Algebra",
-    #             "Probability",
-    #             "Optimization",
-    #             "Discrete Mathematics",
-    #         ],
-    #         "subtopic_name": [
-    #             "Linear Transformations",
-    #             "Vector Spaces",
-    #             "Algebraic expressions, Equations, and Inequalities",
-    #             "Triple Integration",
-    #         ],
-    #     }
-    #     UR_Deep_2 = {
-    #         "keyword_name": [
-    #             "Matrix of a linear transformation",
-    #             "Triangles",
-    #             "Event",
-    #             "Roots of a function",
-    #         ],
-    #         "topic_name": [
-    #             "Real Functions of Several Variables",
-    #             "Optimization",
-    #             "Real Functions of a Single Variable",
-    #             "Graph Theory",
-    #         ],
-    #         "subtopic_name": [
-    #             "Double Integration",
-    #             "Triple Integration",
-    #             "Derivatives",
-    #             "Domain, Image and Graphics",
-    #         ],
-    #     }
+        UR_Shallow_1 = {
+            "keyword_name": ["Cauchy problem"],
+            "topic_name": ["Integration", "Discrete Mathematics"],
+            "subtopic_name": ["Recursivity"],
+            "question_id": [80],
+            "id_lect": [2162],
+            "answer1": ["The system has no solution."],
+            "keyword_id": [139],
+        }
 
-    #     UR_Shallow_1 = {
-    #         "keyword_name": ["Cauchy problem"],
-    #         "topic_name": ["Integration", "Discrete Mathematics"],
-    #         "subtopic_name": ["Recursivity"],
-    #         "question_id": [80],
-    #         "id_lect": [2162],
-    #         "answer1": ["The system has no solution."],
-    #         "keyword_id": [139],
-    #     }
+        UR_Shallow_2 = {
+            "newLevel": [2],
+            "algorithmLevel": [2],
+            "checked": [1.0],
+            "keyword_id": [41.0],
+            "keyword_name": ["Continuity"],
+            "topic_name": ["Discrete Mathematics"],
+            "subtopic_name": ["Limits, Continuity, Domain and Image"],
+        }
 
-    #     UR_Shallow_2 = {
-    #         "newLevel": [2],
-    #         "algorithmLevel": [2],
-    #         "checked": [1.0],
-    #         "keyword_id": [41.0],
-    #         "keyword_name": ["Continuity"],
-    #         "topic_name": ["Discrete Mathematics"],
-    #         "subtopic_name": ["Limits, Continuity, Domain and Image"],
-    #     }
+        UR = self.create_flexible_dataframe(UR_Deep_1)
+        base_cols = list(UR_Deep_1.keys()) + [id_col]
+        T = mathe_df[base_cols].copy()
 
-    #     UR = self.create_flexible_dataframe(UR_Deep_1)
-    #     base_cols = list(UR_Deep_1.keys()) + [id_col]
-    #     T = mathe_df[base_cols].copy()
+        self.cases[50] = (T, UR)  # UR_Deep_1
 
-    #     # self.cases[20] = (T, UR)  # UR_Deep_1
+        UR = self.create_flexible_dataframe(UR_Deep_2)
+        base_cols = list(UR_Deep_2.keys()) + [id_col]
+        T = mathe_df[base_cols].copy()
+        print(f"[load_fixed_mathe_case] Loaded T with columns: {list(T.columns)}")
+        # self.cases[21] = (T, UR)  # UR_Deep_2
 
-    #     UR = self.create_flexible_dataframe(UR_Deep_2)
-    #     base_cols = list(UR_Deep_2.keys()) + [id_col]
-    #     T = mathe_df[base_cols].copy()
-    #     print(f"[load_fixed_mathe_case] Loaded T with columns: {list(T.columns)}")
-    #     self.cases[21] = (T, UR)  # UR_Deep_2
+        UR = self.create_flexible_dataframe(UR_Shallow_1)
+        base_cols = list(UR_Shallow_1.keys()) + [id_col]
+        T = mathe_df[base_cols].copy()
 
-    #     UR = self.create_flexible_dataframe(UR_Shallow_1)
-    #     base_cols = list(UR_Shallow_1.keys()) + [id_col]
-    #     T = mathe_df[base_cols].copy()
+        # self.cases[22] = (T, UR)  # UR_Shallow_1
 
-    #     self.cases[22] = (T, UR)  # UR_Shallow_1
+        UR = self.create_flexible_dataframe(UR_Shallow_2)
+        base_cols = list(UR_Shallow_2.keys()) + [id_col]
+        T = mathe_df[base_cols].copy()
 
-    #     UR = self.create_flexible_dataframe(UR_Shallow_2)
-    #     base_cols = list(UR_Shallow_2.keys()) + [id_col]
-    #     T = mathe_df[base_cols].copy()
+        # self.cases[23] = (T, UR)  # UR_Shallow_2
 
-    #     self.cases[23] = (T, UR)  # UR_Shallow_2
+        UR_Singleton = {"student_id": [1484]}
+        UR = self.create_flexible_dataframe(UR_Singleton)
+        base_cols = list(UR_Singleton.keys()) + [id_col]
+        T = mathe_df[base_cols].copy()
 
-    #     UR_Singleton = {"student_id": [1484]}
-    #     UR = self.create_flexible_dataframe(UR_Singleton)
-    #     base_cols = list(UR_Singleton.keys()) + [id_col]
-    #     T = mathe_df[base_cols].copy()
+        # self.cases[29] = (T, UR)
 
-    #     self.cases[29] = (T, UR)
-
-    #     UR_Sparce = {
-    #         "keyword_name": [
-    #             "Classification of geometrical figures",
-    #             "Volume",
-    #             "Third order",
-    #             "Open surface",
-    #         ],
-    #         "duration": [
-    #             56.0,
-    #             47.0,
-    #         ],
-    #     }
-    #     UR = self.create_flexible_dataframe(UR_Sparce)
-    #     base_cols = list(UR_Sparce.keys()) + [id_col]
-    #     T = mathe_df[base_cols].copy()
-    #     self.cases[30] = (T, UR)
+        UR_Sparce = {
+            "keyword_name": [
+                "Classification of geometrical figures",
+                "Volume",
+                "Third order",
+                "Open surface",
+            ],
+            "duration": [
+                56.0,
+                47.0,
+            ],
+        }
+        UR = self.create_flexible_dataframe(UR_Sparce)
+        base_cols = list(UR_Sparce.keys()) + [id_col]
+        T = mathe_df[base_cols].copy()
+        # self.cases[30] = (T, UR)
 
    
 
@@ -711,6 +721,100 @@ class TestCases:
         
 
         
+
+    def load_scalability_cases(self):
+        """
+        Scalability URs for MovieLens, IDs 101-107 and 111-120.
+
+        Attribute series (101-107): fix 4 values per attr, vary #attrs 1->7
+          Column order: Genres, Title, Zip-code, Age, Occupation, Rating, Gender
+          Gender only has 2 values in MovieLens so it gets 2.
+
+        Value series (111-120): fix 3 attrs (Genres, Title, Zip-code), vary #values 2->20
+          UR112 == UR103 (3 attrs x 4 values) — shared ID 103, 112 points to same entry.
+
+        Values are top medium-frequency values sampled from MovieLens.
+        Series are nested/cumulative: each UR extends the previous one.
+        """
+
+        # --- pre-ranked value pools (top medium-frequency from MovieLens) ---
+        GENRES = [
+            'Comedy', 'Drama', 'Comedy|Romance', 'Comedy|Drama',
+            'Drama|Romance', 'Action|Thriller', 'Horror', 'Drama|Thriller',
+            'Thriller', 'Action|Adventure|Sci-Fi', 'Drama|War', 'Action|Sci-Fi',
+            'Action|Sci-Fi|Thriller', 'Action', 'Action|Drama|War', 'Crime|Drama',
+            'Comedy|Drama|Romance', 'Action|Adventure', 'Action|Drama', 'Comedy|Horror',
+        ]
+        TITLES = [
+            'American Beauty (1999)',
+            'Star Wars: Episode IV - A New Hope (1977)',
+            'Star Wars: Episode V - The Empire Strikes Back (1980)',
+            'Star Wars: Episode VI - Return of the Jedi (1983)',
+            'Jurassic Park (1993)',
+            'Saving Private Ryan (1998)',
+            'Terminator 2: Judgment Day (1991)',
+            'Matrix, The (1999)',
+            'Back to the Future (1985)',
+            'Silence of the Lambs, The (1991)',
+            'Men in Black (1997)',
+            'Raiders of the Lost Ark (1981)',
+            'Fargo (1996)',
+            'Sixth Sense, The (1999)',
+            'Braveheart (1995)',
+            'Shakespeare in Love (1998)',
+            'Princess Bride, The (1987)',
+            "Schindler's List (1993)",
+            'L.A. Confidential (1997)',
+            'Groundhog Day (1993)',
+        ]
+        ZIPCODES = [
+            '94110', '60640', '98103', '95616', '02138', '55408', '48135', '97401',
+            '10025', '10024', '66048', '55112', '92120', '22903', '08904', '02139',
+            '60201', '77006', '53706', '98102',
+        ]
+        AGES        = [25, 35, 18, 45, 50, 56, 1]
+        OCCUPATIONS = [4, 0, 7, 1, 17, 20, 12, 2, 14, 16, 6, 3, 10, 15, 5, 11, 19, 13, 18, 9]
+        RATINGS     = [4, 3, 5, 2, 1]
+        GENDERS     = ['M', 'F']
+
+        
+        def make_ur(cols_vals):
+            return self.create_flexible_dataframe(dict(cols_vals))
+
+        # ----------------------------------------------------------------
+        # ATTRIBUTE SERIES: URs 101-107
+        # Each UR adds one more attribute (4 values each, Gender gets 2)
+        # ----------------------------------------------------------------
+        attr_pool = [
+            ("Genres",     GENRES[:4]),
+            ("Title",      TITLES[:4]),
+            ("Zip-code",   ZIPCODES[:4]),
+            ("Age",        AGES[:4]),
+            ("Occupation", OCCUPATIONS[:4]),
+            ("Rating",     RATINGS[:4]),
+            ("Gender",     GENDERS[:2]),
+        ]
+
+        for n_attrs in range(1, 8):
+            ur_id = 100 + n_attrs
+            self.cases[ur_id] = make_ur(attr_pool[:n_attrs])
+
+        # ----------------------------------------------------------------
+        # VALUE SERIES: URs 111-120
+        # 3 attrs fixed (Genres, Title, Zip-code), values grow 2->20 step 2
+        # UR112 (4 vals) == UR103 — alias only, no duplicate entry
+        # ----------------------------------------------------------------
+        for i, n_vals in enumerate(range(2, 22, 2)):
+            ur_id = 111 + i
+            if ur_id == 112:
+                # same as UR103 — just point to the same object
+                self.cases[112] = self.cases[103]
+                continue
+            self.cases[ur_id] = make_ur([
+                ("Genres",   GENRES[:n_vals]),
+                ("Title",    TITLES[:n_vals]),
+                ("Zip-code", ZIPCODES[:n_vals]),
+            ])
 
     def get_case(self, case_number):
         """

@@ -125,7 +125,7 @@ def load_stats(split_path):
     return {"value_index": value_index, "source_vectors": source_vectors}
 
 
-# def run_sql_method(method_func, UR, parquet_paths, theta, stats=None, mode="tvd-exi", trace_enabled=True,
+# def run_sql_method(method_func, UR, parquet_paths, theta, stats=None, mode="tvd-av", trace_enabled=True,
 #                    all_source=False, rewrite_sql=False):
 #     con = get_connection()
 
@@ -146,7 +146,7 @@ def load_stats(split_path):
 #     return T_result, method_info
 
 def run_sql_method(con, method_func, UR, table_names, theta, stats=None,
-                   mode="tvd-exi", trace_enabled=True,
+                   mode="tvd-av", trace_enabled=True,
                    all_source=False, rewrite_sql=False):
 
     T_result, method_info = method_func(
@@ -159,7 +159,7 @@ def run_sql_method(con, method_func, UR, table_names, theta, stats=None,
 
 
 STEP_COLS = [
-    "mode","UR_id","dataset","split","n_sources","theta","method","variant","rewrite_sql",
+    "mode","UR_id","dataset","split","n_sources","theta","method","variant","rewrite_sql","seed",
     "step","source_selected","sources_explored",
     "rows_current","ecoverage_current","ucoverage_current","penalty_current",
     "shipping_rows_step","shipping_time_step","processing_time_step",
@@ -232,9 +232,11 @@ def iter_split_paths(dataset_name: str, ur_id: int):
     roots = []
 
     if ds == "MOVIELENS":
-        dataset_root = os.path.join(base, "MOVIELENS")
-        if os.path.isdir(dataset_root):
-            roots.append(dataset_root)
+        for candidate in ("MOVIELENS", "MATHE", "MovieLens"):
+            dataset_root = os.path.join(base, candidate)
+            if os.path.isdir(dataset_root):
+                roots.append(dataset_root)
+                break
 
     ur_root = os.path.join(base, f"UR{ur_id}")
     if os.path.isdir(ur_root):
@@ -377,7 +379,7 @@ def run_all_experiments(ur_subset=None):
             dataset_name = dataset_from_ur_id(ur_id)
             if dataset_name == "UNKNOWN":
                 continue
-            #For each mode{tvss-uni, tvd-exi}
+            #For each mode{tvd-aa, tvd-av}
             for mode in modes:
                 #For each split in dataset-level and UR-level splits
                 for split_name, split_path in iter_split_paths(dataset_name, ur_id):
@@ -404,7 +406,7 @@ def run_all_experiments(ur_subset=None):
                     #For each theta
                     for theta in GENERAL_CONFIG["thetas"]:
                         #for each rewrite_sql ∈ {False, True}
-                        for rewrite_sql in (False, True):
+                        for rewrite_sql in (False,):
                         
                             # 1) Classic (no stats)
                             classic_results = []
@@ -414,12 +416,9 @@ def run_all_experiments(ur_subset=None):
                                     theta=theta, rewrite_sql=rewrite_sql):
                                 
                                 executed += 1
-                                trace_to_write = None
                                 for seed in GENERAL_CONFIG["seeds"]:
-                                
-                                    random.seed(seed)
 
-                                
+                                    random.seed(seed)
 
                                     row_seed, trace_seed = run_one_variant(
                                         con=con,
@@ -436,12 +435,18 @@ def run_all_experiments(ur_subset=None):
                                         stats_obj=None,
                                         all_source=False,
                                         rewrite_sql=rewrite_sql,
-                                        log_steps=(seed == CANONICAL_SEED),
+                                        log_steps=True,
                                     )
 
                                     classic_results.append(row_seed)
-                                    if seed == CANONICAL_SEED:
-                                        trace_to_write = trace_seed
+                                    if trace_seed:
+                                        meta_seed = {
+                                            "mode": mode, "UR_id": ur_id, "dataset": dataset_name, "split": split_name,
+                                            "n_sources": n_sources, "theta": theta, "method": method_name, "variant": "Random",
+                                            "rewrite_sql": bool(rewrite_sql), "seed": seed,
+                                        }
+                                        write_steps(trace_seed, meta_seed)
+
                                 if not classic_results:
                                      continue
 
@@ -455,14 +460,6 @@ def run_all_experiments(ur_subset=None):
                                     row[f"{f}_std"] = float(pd.Series(values).std())  # STD goes in *_std column
 
                                 append_row(row)
-                                meta = {
-                                    "mode": mode, "UR_id": ur_id, "dataset": dataset_name, "split": split_name,
-                                    "n_sources": n_sources, "theta": theta, "method": method_name, "variant": "Random",
-                                    "rewrite_sql": bool(rewrite_sql),
-                                    }
-
-                                if trace_to_write:
-                                    write_steps(trace_to_write, meta)
 
                                 mark_done(done_keys,
                                     ur_id=ur_id, dataset=dataset_name, split=split_name,
@@ -509,8 +506,8 @@ def run_all_experiments(ur_subset=None):
                                             theta=theta, rewrite_sql=rewrite_sql)
                                 else:
                                     skipped += 1
-                            # 3) AllSource baseline (you want it for both rewrite flags too)
-                            if rewrite_sql is False: 
+                            # 3) AllSource baseline — skipped for this targeted run
+                            if False and rewrite_sql is False:
                                 if not is_done(done_keys,
                                     ur_id=ur_id, dataset=dataset_name, split=split_name,
                                     mode=mode, method=method_name, variant="All Source",
