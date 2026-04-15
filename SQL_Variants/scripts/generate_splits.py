@@ -270,9 +270,9 @@ def dataset_from_ur_id(ur_id: int) -> str:
 
 def load_full_table(dataset):
     if dataset == "MATHE":
-        return pd.read_csv("data/MATHE/output_table.csv", sep=";", low_memory=False)
+        return pd.read_csv("data/raw/MATHE/output_table.csv", sep=";", low_memory=False)
     if dataset == "MOVIELENS":
-        return pd.read_csv("/home/slide/faresa/TVD/data/Movie_Lens/movielens-1m-full.csv", sep=",", low_memory=False)
+        return pd.read_csv("data/raw/Movie_Lens/movielens-1m-full.csv", sep=",", low_memory=False)
     raise ValueError(f"Unknown dataset: {dataset}")
 
 
