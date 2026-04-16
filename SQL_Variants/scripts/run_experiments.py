@@ -381,6 +381,9 @@ def run_all_experiments(ur_subset=None):
                 continue
             #For each mode{tvd-aa, tvd-av}
             for mode in modes:
+                # tvd-caa is AM-only; TM behaviour for this mode is undefined
+                if mode == "tvd-caa" and method_name == "TM":
+                    continue
                 #For each split in dataset-level and UR-level splits
                 for split_name, split_path in iter_split_paths(dataset_name, ur_id):
                     if SPLIT_FILTER and split_name not in SPLIT_FILTER:
