@@ -27,8 +27,8 @@ def SourceSelectionM1(UR, T, theta, remaining_sources, stats, mode, T_index=None
     remaining_sources: list of (src_idx, table_name)
     stats: statistics object used by helper functions
 
-    tvd-aa  : maximise Δu-coverage; tie-break EPenaltyFree then ETuples
-    tvd-caa : maximise α·Δu-coverage + β·pen_score
+    tvd-aa  : maximise Δe-coverage; tie-break EPenaltyFree then ETuples
+    tvd-caa : maximise α·Δe-coverage + β·pen_score
               pen_score = (ETuples − EPenaltyFree) / ETuples  ∈ [0,1]
               scoring already captures both dims so no extra tie-breaks needed
 
@@ -39,12 +39,15 @@ def SourceSelectionM1(UR, T, theta, remaining_sources, stats, mode, T_index=None
     if not remaining_sources:
         return None, 0
 
-    cov_T = compute_ucoverage(T, UR) if (T is not None and not T.empty) else 0.0
+    if mode == "tvd-caa":
+        cov_T, _ = compute_ecoverage(T, UR) if (T is not None and not T.empty) else (0.0, None)
+    else:
+        cov_T = compute_ucoverage(T, UR) if (T is not None and not T.empty) else 0.0
 
     gains = []
     for src_idx, table_name in remaining_sources:
         if mode == "tvd-caa":
-            avcov_gain = max(0.0, ucoverage_after_source_stats(T_index, UR, src_idx, stats) - cov_T)
+            avcov_gain = max(0.0, ecoverage_after_source_stats(T, UR, src_idx, stats) - cov_T)
             n_tuples   = ETuples(UR, src_idx, stats)
             n_pen_free = EPenaltyFree(UR, src_idx, stats)
             pen_score  = (n_tuples - n_pen_free) / n_tuples if n_tuples > 0 else 0.0
@@ -105,7 +108,7 @@ def Attribute_Match(
     prev_proc_t = 0.0
 
     T = None
-    T_index = TIndexAllLevels(UR) if mode in ("tvd-aa", "tvd-caa") else None
+    T_index = TIndexAllLevels(UR) if mode == "tvd-aa" else None
     id_col = None
 
     remaining_sources = list(enumerate(table_names))
@@ -231,7 +234,7 @@ def Attribute_Match(
 
         if not S_rows.empty:
             T = pd.concat([T, S_rows], ignore_index=True).drop_duplicates()
-            if mode in ("tvd-aa", "tvd-caa") and stats is not None:
+            if mode == "tvd-aa" and stats is not None:
                 T_index.update_from_rows(S_rows, min_matches=1)
 
         processing_time_total += time.perf_counter() - local_start
@@ -239,10 +242,10 @@ def Attribute_Match(
 
         if not all_source:
             if trace:
-                cov = trace[-1]["ucoverage_current"]
+                cov = trace[-1]["ucoverage_current"] if mode == "tvd-aa" else trace[-1]["ecoverage_current"]
                 pen = trace[-1]["penalty_current"]
             else:
-                cov = compute_ucoverage(T, UR) if mode in ("tvd-aa", "tvd-caa") else compute_ecoverage(T, UR)[0]
+                cov = compute_ucoverage(T, UR) if mode == "tvd-aa" else compute_ecoverage(T, UR)[0]
                 pen, _ = compute_penalty(T, UR)
 
             if mode == "tvd-caa":
