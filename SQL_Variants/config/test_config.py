@@ -3,7 +3,7 @@
 GENERAL_CONFIG = {
     # identifiers only — no dataframes here
     "URs": [19, 20, 21, 22, 23],
-    "modes": ["tvd-aa"],
+    "modes": ["tvd-aa", "tvd-caa"],
     "source_splits": [
         "candidates",
         "random",
