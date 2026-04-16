@@ -43,6 +43,8 @@ class TestCases:
         if csv_path is None:
             csv_path = os.path.join(BASE_DIR, "data/raw/MATHE/output_table.csv")
 
+        if not os.path.exists(csv_path):
+            return
         mathe_df = pd.read_csv(csv_path, delimiter=";")
         def detect_id_column(df):
             candidates = [
