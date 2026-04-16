@@ -146,14 +146,18 @@ def load_stats(split_path):
 #     return T_result, method_info
 
 def run_sql_method(con, method_func, UR, table_names, theta, stats=None,
-                   mode="tvd-av", trace_enabled=True,
-                   all_source=False, rewrite_sql=False):
+                   mode="tvd-aa", trace_enabled=True,
+                   all_source=False, rewrite_sql=False,
+                   sigma=0.0, alpha=0.7, beta=0.3):
 
+    extra = {}
+    if method_func.__name__ == "Attribute_Match":
+        extra = {"sigma": sigma, "alpha": alpha, "beta": beta}
     T_result, method_info = method_func(
         con, UR, table_names, theta,
         stats=stats, mode=mode, trace_enabled=trace_enabled,
-        all_source=all_source,
-        rewrite_sql=rewrite_sql,
+        all_source=all_source, rewrite_sql=rewrite_sql,
+        **extra,
     )
     return T_result, method_info
 
@@ -291,6 +295,9 @@ def run_one_variant(
     all_source,
     rewrite_sql,
     log_steps=False,
+    sigma=0.0,
+    alpha=0.7,
+    beta=0.3,
 ):
 
     start = time.perf_counter()
@@ -306,6 +313,9 @@ def run_one_variant(
         all_source=all_source,
         rewrite_sql=rewrite_sql,
         trace_enabled=log_steps,
+        sigma=sigma,
+        alpha=alpha,
+        beta=beta,
     )
 
     
@@ -363,7 +373,14 @@ def run_all_experiments(ur_subset=None):
     methods = ["AM", "TM"]
     methods_env = os.environ.get("METHODS")
     if methods_env:
-        methods = [m.strip() for m in methods_env.split(",") if m.strip()]                                  
+        methods = [m.strip() for m in methods_env.split(",") if m.strip()]
+    thetas = GENERAL_CONFIG["thetas"]
+    thetas_env = os.environ.get("THETAS")
+    if thetas_env:
+        thetas = [float(t.strip()) for t in thetas_env.split(",") if t.strip()]
+    sigma = float(os.environ.get("SIGMA", "0.0"))
+    alpha = float(os.environ.get("ALPHA", "0.7"))
+    beta  = float(os.environ.get("BETA",  "0.3"))                                  
 
     done_keys = load_done_keys()
     t0= time.perf_counter()
@@ -407,7 +424,7 @@ def run_all_experiments(ur_subset=None):
                     if stats is not None:
                         stats["source_sizes"] = load_source_sizes_from_parquet(parquet_paths)
                     #For each theta
-                    for theta in GENERAL_CONFIG["thetas"]:
+                    for theta in thetas:
                         #for each rewrite_sql ∈ {False, True}
                         for rewrite_sql in (False,):
                         
@@ -439,6 +456,7 @@ def run_all_experiments(ur_subset=None):
                                         all_source=False,
                                         rewrite_sql=rewrite_sql,
                                         log_steps=True,
+                                        sigma=sigma, alpha=alpha, beta=beta,
                                     )
 
                                     classic_results.append(row_seed)
@@ -494,6 +512,7 @@ def run_all_experiments(ur_subset=None):
                                             all_source=False,
                                             rewrite_sql=rewrite_sql,
                                             log_steps=True,
+                                            sigma=sigma, alpha=alpha, beta=beta,
                                             )
                                         
                                     append_row(row_stat)
