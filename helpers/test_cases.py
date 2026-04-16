@@ -128,7 +128,7 @@ class TestCases:
         UR = self.create_flexible_dataframe(UR_Deep_2)
         base_cols = list(UR_Deep_2.keys()) + [id_col]
         T = mathe_df[base_cols].copy()
-        print(f"[load_fixed_mathe_case] Loaded T with columns: {list(T.columns)}")
+
         # self.cases[21] = (T, UR)  # UR_Deep_2
 
         UR = self.create_flexible_dataframe(UR_Shallow_1)
