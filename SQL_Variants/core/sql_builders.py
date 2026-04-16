@@ -94,6 +94,32 @@ def reformualte_sql(
             counts[c][tup[i]] += 1
 
     # =========================
+    # tvd-caa: remove value v in attribute a only if T contains a row where
+    # v is the sole UR-matching value (all other UR attributes have penalty values)
+    # =========================
+    if mode == "tvd-caa":
+        ur_sets = {c: set(UR[c]) for c in cols}
+        contaminated = {c: set() for c in cols}
+        for _, row in T.iterrows():
+            matched = [
+                c for c in cols
+                if c in row.index and pd.notna(row[c]) and row[c] in ur_sets[c]
+            ]
+            if len(matched) == 1:
+                a = matched[0]
+                contaminated[a].add(row[a])
+
+        reduced_UR = {
+            c: [v for v in UR[c] if v not in contaminated[c]]
+            for c in cols
+        }
+        reduced_UR = {c: vs for c, vs in reduced_UR.items() if vs}
+        if reduced_UR:
+            return construct_AM_sql(reduced_UR)
+        else:
+            return "FALSE"
+
+    # =========================
     # tvd-av: value seen once is enough
     # =========================
     if mode == "tvd-av":

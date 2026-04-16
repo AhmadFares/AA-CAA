@@ -10,7 +10,7 @@ from SQL_Variants.core.utils import (
     compute_penalty,
 )
 
-from SQL_Variants.core.Algos import EPrune, UPrune
+from SQL_Variants.core.Algos import EPrune, UPrune, CAAprune
 from SQL_Variants.core.sql_builders import reformualte_sql, construct_AM_sql
 from SQL_Variants.core.stats import (
     ecoverage_after_source_stats, EPenaltyFree, ETuples,
@@ -22,68 +22,71 @@ from SQL_Variants.core.stats import (
 # choose next source (stats-based)
 # ------------------------------------------------------------
 
-def SourceSelectionM1(UR, T, theta,remaining_sources, stats, mode, T_index=None):
+def SourceSelectionM1(UR, T, theta, remaining_sources, stats, mode, T_index=None, alpha=0.7, beta=0.3):
     """
     remaining_sources: list of (src_idx, table_name)
-    stat: statistics object used by helper functions
+    stats: statistics object used by helper functions
+
+    tvd-aa  : maximise Δu-coverage; tie-break EPenaltyFree then ETuples
+    tvd-caa : maximise α·Δu-coverage + β·pen_score
+              pen_score = (ETuples − EPenaltyFree) / ETuples  ∈ [0,1]
+              scoring already captures both dims so no extra tie-breaks needed
 
     returns:
       best: (src_idx, table_name) or None
-      best_gain: float (max Δcov) or 0
+      best_gain: float or 0
     """
     if not remaining_sources:
         return None, 0
 
-    if mode == "tvd-aa":
-        cov_T = compute_ucoverage(T, UR) if (T is not None and not T.empty) else 0.0
-    else:
-        cov_T, _ = compute_ecoverage(T, UR)
+    cov_T = compute_ucoverage(T, UR) if (T is not None and not T.empty) else 0.0
 
     gains = []
-    
-    
     for src_idx, table_name in remaining_sources:
-       if cov_T < theta:
-            if mode == "tvd-aa":
-                cov_T_plus = ucoverage_after_source_stats(T_index, UR, src_idx, stats)
+        if mode == "tvd-caa":
+            avcov_gain = max(0.0, ucoverage_after_source_stats(T_index, UR, src_idx, stats) - cov_T)
+            n_tuples   = ETuples(UR, src_idx, stats)
+            n_pen_free = EPenaltyFree(UR, src_idx, stats)
+            pen_score  = (n_tuples - n_pen_free) / n_tuples if n_tuples > 0 else 0.0
+            delta      = alpha * avcov_gain + beta * pen_score
+
+        else:  # tvd-aa
+            if cov_T < theta:
+                delta = ucoverage_after_source_stats(T_index, UR, src_idx, stats) - cov_T
             else:
-                cov_T_plus = ecoverage_after_source_stats(T, UR, src_idx, stats)
-            # Coverage(UR, T ⊕ S_i) using stats for S_i
-            # print("src", src_idx, "cov_T", cov_T, "cov_T_plus", cov_T_plus, "delta", cov_T_plus - cov_T)
-            delta = cov_T_plus - cov_T
-       else:
-            delta = 0.0   # ← explicitly zero gain
-        
-       gains.append(((src_idx, table_name), delta))
+                delta = 0.0
+
+        gains.append(((src_idx, table_name), delta))
 
     max_gain = max(delta for _, delta in gains)
     C = [s for (s, delta) in gains if delta == max_gain]
 
-    # ---- 2) tie-break: maximize EPenaltyFree ----
-    if len(C) > 1:
-        scores = [(s, EPenaltyFree(UR, s[0], stats)) for s in C]  # s[0] is src_idx
-        best_score = max(sc for _, sc in scores)
-        if max_gain <=0 and best_score <= 0:
+    if mode == "tvd-caa":
+        # composite score already encodes both dims; just guard all-zero case
+        if max_gain <= 0:
             return None, 0
-        C = [s for (s, sc) in scores if sc == best_score]
-        # print('Tie-break EPenaltyFree, candidates:', C)
-        # print('Best score:', best_score)
-    
-    # ---- 3) tie-break: minimize ETuples ----
-    if len(C) > 1:
-        scores = [(s, ETuples(UR, s[0], stats)) for s in C]
-        best_score = min(sc for _, sc in scores)
-        C = [s for (s, sc) in scores if sc == best_score]
-        # print('Tie-break ETuples, candidates:', C)
-        # print('Best score:', best_score)
-    # print('Selected source:', C[0], 'with gain:', max_gain)
+    else:
+        # tvd-aa tie-breaks
+        if len(C) > 1:
+            scores = [(s, EPenaltyFree(UR, s[0], stats)) for s in C]
+            best_score = max(sc for _, sc in scores)
+            if max_gain <= 0 and best_score <= 0:
+                return None, 0
+            C = [s for (s, sc) in scores if sc == best_score]
+
+        if len(C) > 1:
+            scores = [(s, ETuples(UR, s[0], stats)) for s in C]
+            best_score = min(sc for _, sc in scores)
+            C = [s for (s, sc) in scores if sc == best_score]
+
     return C[0], max_gain
 
 
 def Attribute_Match(
     con, UR, table_names, theta,
-    stats=None, mode="tvd-av",trace_enabled=True,
+    stats=None, mode="tvd-aa", trace_enabled=True,
     all_source=False, rewrite_sql=False,
+    sigma=0.0, alpha=0.7, beta=0.3,
 ):
     if all_source:
         assert stats is None, "All-Source must not be used with stats"
@@ -102,7 +105,7 @@ def Attribute_Match(
     prev_proc_t = 0.0
 
     T = None
-    T_index = TIndexAllLevels(UR) if mode == "tvd-aa" else None
+    T_index = TIndexAllLevels(UR) if mode in ("tvd-aa", "tvd-caa") else None
     id_col = None
 
     remaining_sources = list(enumerate(table_names))
@@ -183,7 +186,7 @@ def Attribute_Match(
         
         elif stats is not None:
             sel_start = time.perf_counter()
-            best, gain = SourceSelectionM1(UR, T, theta, remaining_sources, stats, mode, T_index)
+            best, gain = SourceSelectionM1(UR, T, theta, remaining_sources, stats, mode, T_index, alpha=alpha, beta=beta)
             sel_dt = time.perf_counter() - sel_start
             processing_time_total += sel_dt 
             if best is None:
@@ -228,27 +231,33 @@ def Attribute_Match(
 
         if not S_rows.empty:
             T = pd.concat([T, S_rows], ignore_index=True).drop_duplicates()
-            if mode == "tvd-aa" and stats is not None:
-                T_index.update_from_rows(S_rows, min_matches=1)  # NEW CHANGE WAS NOT IN OLD PAPER: was min_matches=2; single-attribute rows must be tracked so T_index baseline matches compute_ucoverage, preventing false-negative gain estimates
+            if mode in ("tvd-aa", "tvd-caa") and stats is not None:
+                T_index.update_from_rows(S_rows, min_matches=1)
 
         processing_time_total += time.perf_counter() - local_start
         record_step(table_name)
 
-        # stopping condition — NEW CHANGE WAS NOT IN OLD PAPER: removed pen==0 requirement, stop when cov>=theta only
-        # reuse ucoverage already computed inside record_step to avoid a second expensive call;
-        # if tracing is off, fall back to computing it directly
         if not all_source:
             if trace:
                 cov = trace[-1]["ucoverage_current"]
+                pen = trace[-1]["penalty_current"]
             else:
-                cov = compute_ucoverage(T, UR) if mode == "tvd-aa" else compute_ecoverage(T, UR)[0]
-            if cov >= theta:
-                break
+                cov = compute_ucoverage(T, UR) if mode in ("tvd-aa", "tvd-caa") else compute_ecoverage(T, UR)[0]
+                pen, _ = compute_penalty(T, UR)
+
+            if mode == "tvd-caa":
+                if cov >= theta and pen >= sigma:
+                    break
+            else:
+                if cov >= theta:
+                    break
 
     # ---- FINAL PRUNING + TRACE ROW ----
     if T is not None and not T.empty:
         prune_start = time.perf_counter()
-        if mode == "tvd-aa":
+        if mode == "tvd-caa":
+            T = CAAprune(T, UR)
+        elif mode == "tvd-aa":
             T = UPrune(T, UR)
         else:
             T = EPrune(T, UR)
