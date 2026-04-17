@@ -90,6 +90,7 @@ def Attribute_Match(
     stats=None, mode="tvd-aa", trace_enabled=True,
     all_source=False, rewrite_sql=False,
     sigma=0.0, alpha=0.7, beta=0.3,
+    eps=0.01,
 ):
     if all_source:
         assert stats is None, "All-Source must not be used with stats"
@@ -108,6 +109,7 @@ def Attribute_Match(
     prev_proc_t = 0.0
 
     T = None
+    prev_pen = 0.0
     T_index = TIndexAllLevels(UR) if mode == "tvd-aa" else None
     id_col = None
 
@@ -249,8 +251,10 @@ def Attribute_Match(
                 pen, _ = compute_penalty(T, UR)
 
             if mode == "tvd-caa":
-                if cov >= theta and pen >= sigma:
+                delta_pen = pen - prev_pen
+                if cov >= theta and delta_pen < eps:
                     break
+                prev_pen = pen
             else:
                 if cov >= theta:
                     break

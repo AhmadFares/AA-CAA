@@ -148,11 +148,11 @@ def load_stats(split_path):
 def run_sql_method(con, method_func, UR, table_names, theta, stats=None,
                    mode="tvd-aa", trace_enabled=True,
                    all_source=False, rewrite_sql=False,
-                   sigma=0.0, alpha=0.7, beta=0.3):
+                   sigma=0.0, alpha=0.7, beta=0.3, eps=0.01):
 
     extra = {}
     if method_func.__name__ == "Attribute_Match":
-        extra = {"sigma": sigma, "alpha": alpha, "beta": beta}
+        extra = {"sigma": sigma, "alpha": alpha, "beta": beta, "eps": eps}
     T_result, method_info = method_func(
         con, UR, table_names, theta,
         stats=stats, mode=mode, trace_enabled=trace_enabled,
@@ -298,6 +298,7 @@ def run_one_variant(
     sigma=0.0,
     alpha=0.7,
     beta=0.3,
+    eps=0.01,
 ):
 
     start = time.perf_counter()
@@ -316,6 +317,7 @@ def run_one_variant(
         sigma=sigma,
         alpha=alpha,
         beta=beta,
+        eps=eps,
     )
 
     
@@ -380,7 +382,30 @@ def run_all_experiments(ur_subset=None):
         thetas = [float(t.strip()) for t in thetas_env.split(",") if t.strip()]
     sigma = float(os.environ.get("SIGMA", "0.0"))
     alpha = float(os.environ.get("ALPHA", "0.7"))
-    beta  = float(os.environ.get("BETA",  "0.3"))                                  
+    beta  = float(os.environ.get("BETA",  "0.3"))
+    eps   = float(os.environ.get("EPS",  "0.01"))
+    description = os.environ.get("DESC", "")
+
+    # ---- Write manifest ----
+    manifest = {
+        "job_tag": JOB_TAG,
+        "description": description,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "ur_subset": ur_subset,
+        "modes": modes,
+        "methods": methods,
+        "thetas": thetas,
+        "sigma": sigma,
+        "alpha": alpha,
+        "beta": beta,
+        "eps": eps,
+        "split_filter": list(SPLIT_FILTER) if SPLIT_FILTER else None,
+        "seeds": GENERAL_CONFIG["seeds"],
+    }
+    manifest_path = os.path.join(RESULTS_DIR, "manifest.json")
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+    print(f"Manifest written to {manifest_path}")
 
     done_keys = load_done_keys()
     t0= time.perf_counter()
@@ -456,7 +481,7 @@ def run_all_experiments(ur_subset=None):
                                         all_source=False,
                                         rewrite_sql=rewrite_sql,
                                         log_steps=True,
-                                        sigma=sigma, alpha=alpha, beta=beta,
+                                        sigma=sigma, alpha=alpha, beta=beta, eps=eps,
                                     )
 
                                     classic_results.append(row_seed)
@@ -512,7 +537,7 @@ def run_all_experiments(ur_subset=None):
                                             all_source=False,
                                             rewrite_sql=rewrite_sql,
                                             log_steps=True,
-                                            sigma=sigma, alpha=alpha, beta=beta,
+                                            sigma=sigma, alpha=alpha, beta=beta, eps=eps,
                                             )
                                         
                                     append_row(row_stat)
