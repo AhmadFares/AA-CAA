@@ -19,6 +19,7 @@ class TestCases:
         self.load_fixed_mathe_case()  # Load MATHE case
         self.load_fixed_movielens_case()  # Load fixed MovieLens case
         self.load_fixed_tus_case()
+        self.load_fixed_cordis_case()
         self.load_scalability_cases()  # Load scalability URs (101-107, 111-120)
 
    
@@ -723,6 +724,143 @@ class TestCases:
         
 
         
+
+    def load_fixed_cordis_case(self):
+        """
+        CORDIS H2020 URs (IDs 51-70).
+        Sources = 26 EU coordinator countries.
+        Schema = TOPIC, FUNDING_SCHEME, ACTIVITY_TYPE, STATUS, SME, MASTER_CALL, LEGAL_BASIS.
+        Selective cols: TOPIC (~2,346 values sel≤10%), MASTER_CALL (~151 sel≤10%),
+                        FUNDING_SCHEME (14 sel≤10%), LEGAL_BASIS (5 sel≤10%).
+        """
+
+        # ── Ultra-rare single TOPIC (sel = 1/26) ─────────────────────────
+        UR51 = {
+            "TOPIC": ["CNS"],
+        }
+
+        UR52 = {
+            "TOPIC": ["GEANT", "EURATOM", "SECURITY"],
+        }
+
+        UR53 = {
+            "TOPIC": ["Engines", "Airframes", "Systems"],
+            "MASTER_CALL": ["H2020-CS2-CFP09-2018-02"],
+        }
+
+        # ── Rare TOPIC + rare MASTER_CALL ────────────────────────────────
+        UR54 = {
+            "TOPIC": ["5G"],
+            "MASTER_CALL": ["H2020-FETFLAG-2014"],
+            "FUNDING_SCHEME": ["COFUND"],
+        }
+
+        UR55 = {
+            "TOPIC": ["FETFLAGSHIP", "5G and beyond", "EDGE COMPUTING"],
+            "MASTER_CALL": ["H2020-FETHPC-2018-2020"],
+        }
+
+        UR56 = {
+            "TOPIC": ["Smart Mobility", "Science4Refugees", "Design Technology"],
+            "MASTER_CALL": ["H2020-EEN-GA-2017-2018"],
+            "FUNDING_SCHEME": ["COFUND-PCP"],
+        }
+
+        # ── MASTER_CALL only ─────────────────────────────────────────────
+        UR57 = {
+            "MASTER_CALL": ["EURATOM-Adhoc-2014-20", "H2020-BIR-2014", "H2020-CBBA-2016"],
+        }
+
+        UR58 = {
+            "MASTER_CALL": ["H2020-ECSEL-2018-3-CSA-Industry4E-one-stage",
+                            "H2020-ECSEL-2019-3-CSA-Health-E-one-stage",
+                            "H2020-ECSEL-2018-4-CSA-MobilityE-one-stage"],
+            "LEGAL_BASIS": ["H2020-EU.2."],
+        }
+
+        # ── LEGAL_BASIS focus ────────────────────────────────────────────
+        UR59 = {
+            "LEGAL_BASIS": ["H2020-EU.3.3.;H2020-EU.3.3.3.1.;H2020-EU.3.3.3.3.",
+                            "H2020-EU.4.e.", "H2020-EU.5.g."],
+        }
+
+        UR60 = {
+            "TOPIC": ["CNS", "5G and beyond", "U-space", "Health"],
+            "LEGAL_BASIS": ["H2020-EU.2.", "H2020-EU.2.1."],
+        }
+
+        # ── FUNDING_SCHEME rare combos ────────────────────────────────────
+        UR61 = {
+            "FUNDING_SCHEME": ["COFUND", "CS2-CSA", "COFUND-PCP", "IA-LS"],
+        }
+
+        UR62 = {
+            "TOPIC": ["FETFLAGSHIP", "Smart Mobility"],
+            "FUNDING_SCHEME": ["IMI2-CSA", "SESAR-CSA"],
+            "MASTER_CALL": ["H2020-EEN-GA3-2018"],
+        }
+
+        UR63 = {
+            "TOPIC": ["Engines", "Datalink", "CWP - HMI", "H2 Valley"],
+            "FUNDING_SCHEME": ["Shift2Rail-IA", "Shift2Rail-CSA"],
+        }
+
+        UR64 = {
+            "MASTER_CALL": ["H2020-ALTFI-2017", "H2020-BBI-JTI-2015-01", "H2020-EUK-2016"],
+            "LEGAL_BASIS": ["H2020-EU.4.f.", "H2020-EU.5.e."],
+        }
+
+        # ── Large rare TOPIC sets ─────────────────────────────────────────
+        UR65 = {
+            "TOPIC": ["CNS", "COST", "Food", "MSCA", "INFRA", "ERC-14", "EURATOM"],
+        }
+
+        UR66 = {
+            "TOPIC": ["5G Networks", "SECURITY", "IPorta 2", "SPREADING"],
+            "MASTER_CALL": ["H2020-EIC-Mutuallearning", "H2020-EEN-GA-2017-2018-2"],
+        }
+
+        # ── Full multi-column URs ─────────────────────────────────────────
+        UR67 = {
+            "TOPIC": ["SPREADING", "IPorta 2", "EUCYS 2020"],
+            "FUNDING_SCHEME": ["PPI", "ERC-LVG"],
+            "MASTER_CALL": ["H2020-FPA-SGA-SC1-CEPI-2019"],
+            "STATUS": ["TERMINATED"],
+        }
+
+        UR68 = {
+            "TOPIC": ["Privacy", "Teaming", "Space Weather", "ERA Chairs"],
+            "MASTER_CALL": ["ERC-2014-SUPPORT-1"],
+            "LEGAL_BASIS": ["H2020-EU.5.h."],
+        }
+
+        UR69 = {
+            "MASTER_CALL": ["H2020-IBA-19-CHAIR-2017", "H2020-IBA-ARF-Austria-2018"],
+            "LEGAL_BASIS": ["H2020-EU.4.e.", "H2020-EU.5.g."],
+            "FUNDING_SCHEME": ["COFUND", "COFUND-EJP"],
+        }
+
+        UR70 = {
+            "TOPIC": ["CNS", "GEANT", "Engines", "Airframes", "5G",
+                      "Smart Mobility", "U-space", "SPREADING"],
+            "MASTER_CALL": ["EURATOM-Adhoc-2014-20", "H2020-BIR-2014",
+                            "H2020-FETHPC-2018-2020"],
+            "LEGAL_BASIS": ["H2020-EU.2.", "H2020-EU.4.e."],
+        }
+
+        hardcoded = {
+            name: val
+            for name, val in locals().items()
+            if isinstance(val, dict) and name.startswith("UR") and name[2:].isdigit()
+        }
+
+        self.case_names = getattr(self, "case_names", {})
+        for name in sorted(hardcoded.keys(), key=lambda nm: int(nm[2:])):
+            cid = int(name[2:])
+            ur_dict = {k: v for k, v in hardcoded[name].items()
+                       if isinstance(v, list) and len(v) > 0}
+            self.cases[cid] = self.create_flexible_dataframe(ur_dict)
+            self.case_names[cid] = f"cordis_{cid}"
 
     def load_scalability_cases(self):
         """

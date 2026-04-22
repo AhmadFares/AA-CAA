@@ -148,11 +148,11 @@ def load_stats(split_path):
 def run_sql_method(con, method_func, UR, table_names, theta, stats=None,
                    mode="tvd-aa", trace_enabled=True,
                    all_source=False, rewrite_sql=False,
-                   sigma=0.0, alpha=0.7, beta=0.3, eps=0.01):
+                   alpha=0.7, beta=0.3, eps=0.01):
 
     extra = {}
     if method_func.__name__ == "Attribute_Match":
-        extra = {"sigma": sigma, "alpha": alpha, "beta": beta, "eps": eps}
+        extra = {"alpha": alpha, "beta": beta, "eps": eps}
     T_result, method_info = method_func(
         con, UR, table_names, theta,
         stats=stats, mode=mode, trace_enabled=trace_enabled,
@@ -208,6 +208,7 @@ def iter_split_paths(dataset_name: str, ur_id: int):
     allowed_prefixes = {
         "MOVIELENS": {"random", "skewed", "low_penalty", "high_penalty", "low_coverage"},
         "TUS": {"candidates", "low_penalty", "high_penalty", "low_coverage"},
+        "CORDIS": {"candidates", "low_coverage"},
     }
 
     if ds not in allowed_prefixes:
@@ -295,7 +296,6 @@ def run_one_variant(
     all_source,
     rewrite_sql,
     log_steps=False,
-    sigma=0.0,
     alpha=0.7,
     beta=0.3,
     eps=0.01,
@@ -314,7 +314,6 @@ def run_one_variant(
         all_source=all_source,
         rewrite_sql=rewrite_sql,
         trace_enabled=log_steps,
-        sigma=sigma,
         alpha=alpha,
         beta=beta,
         eps=eps,
@@ -380,7 +379,6 @@ def run_all_experiments(ur_subset=None):
     thetas_env = os.environ.get("THETAS")
     if thetas_env:
         thetas = [float(t.strip()) for t in thetas_env.split(",") if t.strip()]
-    sigma = float(os.environ.get("SIGMA", "0.0"))
     alpha = float(os.environ.get("ALPHA", "0.7"))
     beta  = float(os.environ.get("BETA",  "0.3"))
     eps   = float(os.environ.get("EPS",  "0.01"))
@@ -395,7 +393,6 @@ def run_all_experiments(ur_subset=None):
         "modes": modes,
         "methods": methods,
         "thetas": thetas,
-        "sigma": sigma,
         "alpha": alpha,
         "beta": beta,
         "eps": eps,
@@ -481,7 +478,7 @@ def run_all_experiments(ur_subset=None):
                                         all_source=False,
                                         rewrite_sql=rewrite_sql,
                                         log_steps=True,
-                                        sigma=sigma, alpha=alpha, beta=beta, eps=eps,
+                                        alpha=alpha, beta=beta, eps=eps,
                                     )
 
                                     classic_results.append(row_seed)
@@ -537,7 +534,7 @@ def run_all_experiments(ur_subset=None):
                                             all_source=False,
                                             rewrite_sql=rewrite_sql,
                                             log_steps=True,
-                                            sigma=sigma, alpha=alpha, beta=beta, eps=eps,
+                                            alpha=alpha, beta=beta, eps=eps,
                                             )
                                         
                                     append_row(row_stat)
