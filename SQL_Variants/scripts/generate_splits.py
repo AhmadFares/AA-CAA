@@ -264,6 +264,8 @@ def dataset_from_ur_id(ur_id: int) -> str:
         return "MOVIELENS"
     if 21 <= ur_id <= 48:
         return "TUS"
+    if 51 <= ur_id <= 70:
+        return "CORDIS"
     return "UNKNOWN"
 
 
