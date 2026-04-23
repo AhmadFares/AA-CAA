@@ -2,9 +2,19 @@
 Build CORDIS split folders on the server.
 Standalone — avoids full project import chain (no TestCases, no data_loading).
 Schema: TOPIC, FUNDING_SCHEME, ACTIVITY_TYPE, STATUS, SME, MASTER_CALL, LEGAL_BASIS
+
+Run from ~/AA-CAA:
+  source .venv/bin/activate
+  export PYTHONPATH="/home/slide/faresa/AA-CAA/.venv/lib/python3.11/site-packages:$PYTHONPATH"
+  python3 scripts_server/build_cordis_splits.py
 """
 
-import os, json, shutil
+import os, json, shutil, sys
+# Ensure venv site-packages are on path (needed when venv uses symlinked python)
+_SP = "/home/slide/faresa/AA-CAA/.venv/lib/python3.11/site-packages"
+if _SP not in sys.path:
+    sys.path.insert(0, _SP)
+
 import numpy as np
 import pandas as pd
 

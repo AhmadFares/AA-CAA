@@ -8,6 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
+export PYTHONPATH="/home/slide/faresa/AA-CAA/.venv/lib/python3.11/site-packages:$PYTHONPATH"
 
 mkdir -p logs
 
