@@ -89,7 +89,7 @@ def Attribute_Match(
     con, UR, table_names, theta,
     stats=None, mode="tvd-aa", trace_enabled=True,
     all_source=False, rewrite_sql=False,
-    sigma=0.0, alpha=0.7, beta=0.3,
+    alpha=0.7, beta=0.3,
     eps=0.01,
 ):
     if all_source:
@@ -110,8 +110,10 @@ def Attribute_Match(
 
     T = None
     prev_pen = 0.0
+    prev_cov = 0.0
     T_index = TIndexAllLevels(UR) if mode == "tvd-aa" else None
     id_col = None
+    _step_gain = 0.0  # predicted gain for current step
 
     remaining_sources = list(enumerate(table_names))
     where_clause = construct_AM_sql(UR)
@@ -160,6 +162,7 @@ def Attribute_Match(
             "step": step_val,
             "source_selected": source_label,
             "sources_explored": sources_explored,
+            "predicted_gain": float(_step_gain),
 
             "rows_current": rows_current,
             "ecoverage_current": float(ecov_current),
@@ -188,20 +191,23 @@ def Attribute_Match(
         # ---- PICK SOURCE ----
         if all_source:
             src_idx, table_name = remaining_sources.pop(0)
-        
+            _step_gain = 0.0
+
         elif stats is not None:
             sel_start = time.perf_counter()
             best, gain = SourceSelectionM1(UR, T, theta, remaining_sources, stats, mode, T_index, alpha=alpha, beta=beta)
             sel_dt = time.perf_counter() - sel_start
-            processing_time_total += sel_dt 
+            processing_time_total += sel_dt
             if best is None:
                 break
             src_idx, table_name = best
             remaining_sources = [(i, p) for (i, p) in remaining_sources if i != src_idx]
+            _step_gain = float(gain)
 
         else:
             i = random.randrange(len(remaining_sources))
             src_idx, table_name = remaining_sources.pop(i)
+            _step_gain = 0.0
 
         sources_explored += 1
 
@@ -252,9 +258,11 @@ def Attribute_Match(
 
             if mode == "tvd-caa":
                 delta_pen = pen - prev_pen
-                if cov >= theta and delta_pen < eps:
+                delta_cov = cov - prev_cov
+                if delta_cov < eps and delta_pen < eps:
                     break
                 prev_pen = pen
+                prev_cov = cov
             else:
                 if cov >= theta:
                     break

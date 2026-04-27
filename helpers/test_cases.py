@@ -628,7 +628,7 @@ class TestCases:
 
         UR29 = {
             "U_2": ['Active - FLBG', 'Protection', 'Active - FLB', 'Passive'],
-            "U_20": [4500, 'Vehicles Daily', 8200, 320],
+            "U_20": ['4500', 'Vehicles Daily', '8200', '320'],
         }
 
         UR30 = {
@@ -638,7 +638,7 @@ class TestCases:
 
         UR31 = {
             "U_2": ['Active - FLB', 'Passive', 'Active - FLBG'],
-            "U_20": [1140, 10],
+            "U_20": ['1140', '10'],
         }
 
         UR32 = {
