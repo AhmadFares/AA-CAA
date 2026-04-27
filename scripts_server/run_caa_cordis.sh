@@ -6,7 +6,7 @@ source .venv/bin/activate
 export PYTHONPATH="/home/slide/faresa/AA-CAA/.venv/lib/python3.11/site-packages:${PYTHONPATH:-}"
 mkdir -p logs
 
-BASE="JOB_TAG=caa_cordis SPLIT_FILTER=candidates METHODS=AM MODES=tvd-caa EPSILONS=0.02,0.05,0.10 PYTHONUNBUFFERED=1"
+BASE="JOB_TAG=caa_cordis SPLIT_FILTER=candidates METHODS=AM MODES=tvd-caa THETAS=1.0 EPSILONS=0.02,0.05,0.10 PYTHONUNBUFFERED=1"
 
 echo "=== TVD-CAA CORDIS (5 parallel jobs) ==="
 nohup env $BASE python3 -m SQL_Variants.scripts.run_experiments 51 54 > logs/caa_cordis_51_54.log 2>&1 & echo "  [1] UR51-54  PID $!"
