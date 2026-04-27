@@ -164,7 +164,7 @@ def run_sql_method(con, method_func, UR, table_names, theta, stats=None,
 
 STEP_COLS = [
     "mode","UR_id","dataset","split","n_sources","theta","method","variant","rewrite_sql","seed",
-    "step","source_selected","sources_explored",
+    "step","source_selected","sources_explored","predicted_gain",
     "rows_current","ecoverage_current","ucoverage_current","penalty_current",
     "shipping_rows_step","shipping_time_step","processing_time_step",
     "shipping_rows_total","shipping_time_total","processing_time_total","cov_pen_calc_time_step","method_time_total",
@@ -550,8 +550,8 @@ def run_all_experiments(ur_subset=None):
                                             theta=theta, rewrite_sql=rewrite_sql)
                                 else:
                                     skipped += 1
-                            # 3) AllSource baseline — skipped for this targeted run
-                            if False and rewrite_sql is False:
+                            # 3) AllSource baseline
+                            if rewrite_sql is False:
                                 if not is_done(done_keys,
                                     ur_id=ur_id, dataset=dataset_name, split=split_name,
                                     mode=mode, method=method_name, variant="All Source",
