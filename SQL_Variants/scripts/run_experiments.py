@@ -59,6 +59,7 @@ def load_done_keys():
     df["UR_id"] = df["UR_id"].astype(int)
 
 
+    eps_col = df["eps"] if "eps" in df.columns else pd.Series([0.01] * len(df))
     return set(
         zip(
             df["UR_id"],
@@ -69,10 +70,11 @@ def load_done_keys():
             df["variant"],
             df["theta"],
             df["rewrite_sql"],
+            eps_col,
         )
     )
-    
-def is_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta, rewrite_sql):
+
+def is_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta, rewrite_sql, eps=0.01):
     return (
         ur_id,
         dataset,
@@ -82,9 +84,10 @@ def is_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta, r
         variant,
         theta,
         bool(rewrite_sql),
+        eps,
     ) in done_keys
 
-def mark_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta, rewrite_sql):
+def mark_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta, rewrite_sql, eps=0.01):
     done_keys.add((
         ur_id,
         dataset,
@@ -94,6 +97,7 @@ def mark_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta,
         variant,
         theta,
         bool(rewrite_sql),
+        eps,
     ))
 
 def write_steps(trace, meta):
@@ -163,7 +167,7 @@ def run_sql_method(con, method_func, UR, table_names, theta, stats=None,
 
 
 STEP_COLS = [
-    "mode","UR_id","dataset","split","n_sources","theta","method","variant","rewrite_sql","seed",
+    "mode","UR_id","dataset","split","n_sources","theta","eps","method","variant","rewrite_sql","seed",
     "step","source_selected","sources_explored","predicted_gain",
     "rows_current","ecoverage_current","ucoverage_current","penalty_current",
     "shipping_rows_step","shipping_time_step","processing_time_step",
@@ -335,9 +339,10 @@ def run_one_variant(
         "split": split_name,
         "n_sources": n_sources,
         "theta": theta,
+        "eps": eps,
         "method": method_name,
         "variant": variant_name,
-        "rewrite_sql": bool(rewrite_sql),   
+        "rewrite_sql": bool(rewrite_sql),
         "sources_explored": method_info["sources_explored"],
         "shipping_time_total": method_info["shipping_time_total"],
         "shipping_rows_total": method_info["shipping_rows_total"],
@@ -352,8 +357,8 @@ def run_one_variant(
     if log_steps:
         meta = {
             "mode": mode, "UR_id": ur_id, "dataset": dataset_name, "split": split_name,
-            "n_sources": n_sources, "theta": theta, "method": method_name, "variant": variant_name,
-            "rewrite_sql": bool(rewrite_sql),
+            "n_sources": n_sources, "theta": theta, "eps": eps, "method": method_name,
+            "variant": variant_name, "rewrite_sql": bool(rewrite_sql),
         }
 
     return row, trace
@@ -381,7 +386,9 @@ def run_all_experiments(ur_subset=None):
         thetas = [float(t.strip()) for t in thetas_env.split(",") if t.strip()]
     alpha = float(os.environ.get("ALPHA", "0.7"))
     beta  = float(os.environ.get("BETA",  "0.3"))
-    eps   = float(os.environ.get("EPS",  "0.01"))
+    eps   = float(os.environ.get("EPS",  "0.01"))   # default / AA fixed value
+    epsilons_env = os.environ.get("EPSILONS")        # CAA: loop over multiple eps values
+    epsilons_caa = [float(e.strip()) for e in epsilons_env.split(",") if e.strip()] if epsilons_env else [eps]
     description = os.environ.get("DESC", "")
 
     # ---- Write manifest ----
@@ -393,6 +400,7 @@ def run_all_experiments(ur_subset=None):
         "modes": modes,
         "methods": methods,
         "thetas": thetas,
+        "epsilons_caa": epsilons_caa,
         "alpha": alpha,
         "beta": beta,
         "eps": eps,
@@ -445,151 +453,125 @@ def run_all_experiments(ur_subset=None):
                     stats = load_stats(split_path)
                     if stats is not None:
                         stats["source_sizes"] = load_source_sizes_from_parquet(parquet_paths)
-                    #For each theta
+                    #For each theta (AA) or eps (CAA)
                     for theta in thetas:
-                        #for each rewrite_sql ∈ {False, True}
-                        for rewrite_sql in (False,):
-                        
-                            # 1) Classic (no stats)
-                            classic_results = []
-                            if not is_done(done_keys,
-                                    ur_id=ur_id, dataset=dataset_name, split=split_name,
-                                    mode=mode, method=method_name, variant="Random",
-                                    theta=theta, rewrite_sql=rewrite_sql):
-                                
-                                executed += 1
-                                for seed in GENERAL_CONFIG["seeds"]:
+                        eps_loop = epsilons_caa if mode == "tvd-caa" else [eps]
+                        for cur_eps in eps_loop:
+                            for rewrite_sql in (False,):
 
-                                    random.seed(seed)
-
-                                    row_seed, trace_seed = run_one_variant(
-                                        con=con,
-                                        table_names=table_names,
-                                        method_name=method_name,
-                                        variant_name="Random",
-                                        ur_id=ur_id,
-                                        UR=UR,
-                                        theta=theta,
-                                        mode=mode,
-                                        dataset_name=dataset_name,
-                                        split_name=split_name,
-                                        n_sources=n_sources,
-                                        stats_obj=None,
-                                        all_source=False,
-                                        rewrite_sql=rewrite_sql,
-                                        log_steps=True,
-                                        alpha=alpha, beta=beta, eps=eps,
-                                    )
-
-                                    classic_results.append(row_seed)
-                                    if trace_seed:
-                                        meta_seed = {
-                                            "mode": mode, "UR_id": ur_id, "dataset": dataset_name, "split": split_name,
-                                            "n_sources": n_sources, "theta": theta, "method": method_name, "variant": "Random",
-                                            "rewrite_sql": bool(rewrite_sql), "seed": seed,
-                                        }
-                                        write_steps(trace_seed, meta_seed)
-
-                                if not classic_results:
-                                     continue
-
-                                row = classic_results[0].copy()
-                                row["n_seeds"] = len(GENERAL_CONFIG["seeds"])
-
-                                for f in STD_FIELDS:
-                                    values = [r[f] for r in classic_results]
-
-                                    row[f] = sum(values) / len(values)              # MEAN goes in original column
-                                    row[f"{f}_std"] = float(pd.Series(values).std())  # STD goes in *_std column
-
-                                append_row(row)
-
-                                mark_done(done_keys,
-                                    ur_id=ur_id, dataset=dataset_name, split=split_name,
-                                    mode=mode, method=method_name, variant="Random",
-                                    theta=theta, rewrite_sql=rewrite_sql)
-                            else:
-                                skipped += 1
-
-                            # 2) Stats-guided (only if stats exist)
-                            if stats is not None:
+                                # 1) Random
+                                classic_results = []
                                 if not is_done(done_keys,
                                         ur_id=ur_id, dataset=dataset_name, split=split_name,
-                                        mode=mode, method=method_name, variant="Stats Guided",
-                                        theta=theta, rewrite_sql=rewrite_sql):
+                                        mode=mode, method=method_name, variant="Random",
+                                        theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps):
+
                                     executed += 1
-                                    row_stat, trace_stat = run_one_variant(
+                                    for seed in GENERAL_CONFIG["seeds"]:
+                                        random.seed(seed)
+                                        row_seed, trace_seed = run_one_variant(
+                                            con=con,
+                                            table_names=table_names,
+                                            method_name=method_name,
+                                            variant_name="Random",
+                                            ur_id=ur_id, UR=UR, theta=theta, mode=mode,
+                                            dataset_name=dataset_name, split_name=split_name,
+                                            n_sources=n_sources, stats_obj=None,
+                                            all_source=False, rewrite_sql=rewrite_sql,
+                                            log_steps=True, alpha=alpha, beta=beta, eps=cur_eps,
+                                        )
+                                        classic_results.append(row_seed)
+                                        if trace_seed:
+                                            meta_seed = {
+                                                "mode": mode, "UR_id": ur_id, "dataset": dataset_name,
+                                                "split": split_name, "n_sources": n_sources,
+                                                "theta": theta, "eps": cur_eps, "method": method_name,
+                                                "variant": "Random", "rewrite_sql": bool(rewrite_sql), "seed": seed,
+                                            }
+                                            write_steps(trace_seed, meta_seed)
+
+                                    if not classic_results:
+                                        continue
+
+                                    row = classic_results[0].copy()
+                                    row["n_seeds"] = len(GENERAL_CONFIG["seeds"])
+                                    for f in STD_FIELDS:
+                                        values = [r[f] for r in classic_results]
+                                        row[f] = sum(values) / len(values)
+                                        row[f"{f}_std"] = float(pd.Series(values).std())
+                                    append_row(row)
+                                    mark_done(done_keys,
+                                        ur_id=ur_id, dataset=dataset_name, split=split_name,
+                                        mode=mode, method=method_name, variant="Random",
+                                        theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps)
+                                else:
+                                    skipped += 1
+
+                                # 2) Stats Guided
+                                if stats is not None:
+                                    if not is_done(done_keys,
+                                            ur_id=ur_id, dataset=dataset_name, split=split_name,
+                                            mode=mode, method=method_name, variant="Stats Guided",
+                                            theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps):
+                                        executed += 1
+                                        row_stat, trace_stat = run_one_variant(
                                             con=con,
                                             table_names=table_names,
                                             method_name=method_name,
                                             variant_name="Stats Guided",
-                                            ur_id=ur_id,
-                                            UR=UR,
-                                            theta=theta,
-                                            mode=mode,
-                                            dataset_name=dataset_name,
-                                            split_name=split_name,
-                                            n_sources=n_sources,
-                                            stats_obj=stats,
-                                            all_source=False,
-                                            rewrite_sql=rewrite_sql,
-                                            log_steps=True,
-                                            alpha=alpha, beta=beta, eps=eps,
-                                            )
-                                        
-                                    append_row(row_stat)
-                                    meta = {
-                                        "mode": mode, "UR_id": ur_id, "dataset": dataset_name, "split": split_name,
-                                        "n_sources": n_sources, "theta": theta, "method": method_name, "variant": "Stats Guided",
-                                        "rewrite_sql": bool(rewrite_sql),
+                                            ur_id=ur_id, UR=UR, theta=theta, mode=mode,
+                                            dataset_name=dataset_name, split_name=split_name,
+                                            n_sources=n_sources, stats_obj=stats,
+                                            all_source=False, rewrite_sql=rewrite_sql,
+                                            log_steps=True, alpha=alpha, beta=beta, eps=cur_eps,
+                                        )
+                                        append_row(row_stat)
+                                        meta = {
+                                            "mode": mode, "UR_id": ur_id, "dataset": dataset_name,
+                                            "split": split_name, "n_sources": n_sources,
+                                            "theta": theta, "eps": cur_eps, "method": method_name,
+                                            "variant": "Stats Guided", "rewrite_sql": bool(rewrite_sql),
                                         }
-                                    write_steps(trace_stat, meta)
-                                    mark_done(done_keys,
+                                        write_steps(trace_stat, meta)
+                                        mark_done(done_keys,
                                             ur_id=ur_id, dataset=dataset_name, split=split_name,
                                             mode=mode, method=method_name, variant="Stats Guided",
-                                            theta=theta, rewrite_sql=rewrite_sql)
-                                else:
-                                    skipped += 1
-                            # 3) AllSource baseline
-                            if rewrite_sql is False:
-                                if not is_done(done_keys,
-                                    ur_id=ur_id, dataset=dataset_name, split=split_name,
-                                    mode=mode, method=method_name, variant="All Source",
-                                    theta=theta, rewrite_sql=False):
-                                    
+                                            theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps)
+                                    else:
+                                        skipped += 1
 
-                                    executed += 1
-                                    row_all, trace_all = run_one_variant(
-                                        con=con,
-                                        table_names=table_names,
-                                        method_name=method_name,
-                                        variant_name="All Source",
-                                        ur_id=ur_id,
-                                        UR=UR,
-                                        theta=theta,
-                                        mode=mode,
-                                        dataset_name=dataset_name,
-                                        split_name=split_name,
-                                        n_sources=n_sources,
-                                        stats_obj=None,
-                                        all_source=True,
-                                        rewrite_sql=False,
-                                        log_steps=True,
-                                    )
-
-                                    append_row(row_all)
-                                    meta = {
-                                        "mode": mode, "UR_id": ur_id, "dataset": dataset_name, "split": split_name,
-                                        "n_sources": n_sources, "theta": theta, "method": method_name, "variant": "All Source",
-                                        "rewrite_sql": False,
+                                # 3) AllSource baseline
+                                if rewrite_sql is False:
+                                    if not is_done(done_keys,
+                                            ur_id=ur_id, dataset=dataset_name, split=split_name,
+                                            mode=mode, method=method_name, variant="All Source",
+                                            theta=theta, rewrite_sql=False, eps=cur_eps):
+                                        executed += 1
+                                        row_all, trace_all = run_one_variant(
+                                            con=con,
+                                            table_names=table_names,
+                                            method_name=method_name,
+                                            variant_name="All Source",
+                                            ur_id=ur_id, UR=UR, theta=theta, mode=mode,
+                                            dataset_name=dataset_name, split_name=split_name,
+                                            n_sources=n_sources, stats_obj=None,
+                                            all_source=True, rewrite_sql=False,
+                                            log_steps=True, alpha=alpha, beta=beta, eps=cur_eps,
+                                        )
+                                        append_row(row_all)
+                                        meta = {
+                                            "mode": mode, "UR_id": ur_id, "dataset": dataset_name,
+                                            "split": split_name, "n_sources": n_sources,
+                                            "theta": theta, "eps": cur_eps, "method": method_name,
+                                            "variant": "All Source", "rewrite_sql": False,
                                         }
-                                    write_steps(trace_all, meta)
-                                    mark_done(done_keys,
-                                    ur_id=ur_id, dataset=dataset_name, split=split_name,
-                                    mode=mode, method=method_name, variant="All Source",
-                                    theta=theta, rewrite_sql=False)
-                                else:
-                                    skipped += 1
+                                        write_steps(trace_all, meta)
+                                        mark_done(done_keys,
+                                            ur_id=ur_id, dataset=dataset_name, split=split_name,
+                                            mode=mode, method=method_name, variant="All Source",
+                                            theta=theta, rewrite_sql=False, eps=cur_eps)
+                                    else:
+                                        skipped += 1
                     con.close()
 
     print("\n=== Finished ALL experiments ===")
