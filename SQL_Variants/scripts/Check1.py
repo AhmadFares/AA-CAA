@@ -36,7 +36,7 @@ def load_source_csv_paths(split_folder):
 import os
 
 def resolve_split_path(
-    base_path: str,        # e.g. "/Users/faresa/Desktop/TVD/data/generated_splits"
+    base_path: str,        # e.g. "data/generated_splits"
     dataset_name: str,     # "MOVIELENS" or "TUS"
     ur_id: int,
     split_name: str,       # "random", "skewed", "high_pen", "low_cov", "candidates", ...
