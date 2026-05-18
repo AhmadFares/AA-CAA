@@ -95,23 +95,17 @@ All figure scripts are under `scripts_server/` and read from `results/`.
 Run from the repo root:
 
 ```bash
-# AA trajectory figure (Figure X in the paper)
-python scripts_server/plot_paper_aa_with_prune.py
-
-# CAA trajectory figure
-python scripts_server/plot_paper_caa_with_prune.py
-
-# Timing comparison figure
-python scripts_server/plot_timing_comparison.py
-
-# LLM variants — AA
+# AA trajectory figure → results/paper_plots/llm_results/paper_aa_Final.pdf
 python scripts_server/plot_paper_aa_llm.py
 
-# LLM variants — CAA
+# CAA trajectory figure → results/paper_plots/llm_results/paper_caa_Final.pdf
 python scripts_server/plot_paper_caa_llm.py
+
+# Timing comparison → results/paper_plots/llm_results/timing_comparison.pdf
+python scripts_server/plot_timing_comparison.py
 ```
 
-Output PDFs and PNGs are saved to `results/paper_plots/`.
+Output PDFs and PNGs are saved to `results/paper_plots/llm_results/`.
 
 ---
 
