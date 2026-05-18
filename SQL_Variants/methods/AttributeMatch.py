@@ -10,7 +10,7 @@ from SQL_Variants.core.utils import (
     compute_penalty,
 )
 
-from SQL_Variants.core.Algos import EPrune, UPrune, CAAprune
+from SQL_Variants.core.Algos import EPrune, UPrune, CAAprune, CAAprune_v2
 from SQL_Variants.core.sql_builders import reformualte_sql, construct_AM_sql
 from SQL_Variants.core.stats import (
     ecoverage_after_source_stats, EPenaltyFree, ETuples,
@@ -91,6 +91,9 @@ def Attribute_Match(
     all_source=False, rewrite_sql=False,
     alpha=0.7, beta=0.3,
     eps=0.01,
+    preordered_sources=None,       # LLM Guided: pre-ranked list, explored in order
+    llm_adaptive_callback=None,    # LLM Adaptive: callable(remaining, cov, pen, step) → (src,tname)|None
+    caa_prune_version="v1",        # "v1" = original CAAprune, "v2" = paper pseudocode CAAprune_v2
 ):
     if all_source:
         assert stats is None, "All-Source must not be used with stats"
@@ -115,7 +118,11 @@ def Attribute_Match(
     id_col = None
     _step_gain = 0.0  # predicted gain for current step
 
-    remaining_sources = list(enumerate(table_names))
+    remaining_sources = (
+        list(preordered_sources)
+        if preordered_sources is not None
+        else list(enumerate(table_names))
+    )
     where_clause = construct_AM_sql(UR)
 
     # ---------------- Helper: record one step (after totals + T updated) ----------------
@@ -191,6 +198,28 @@ def Attribute_Match(
         # ---- PICK SOURCE ----
         if all_source:
             src_idx, table_name = remaining_sources.pop(0)
+            _step_gain = 0.0
+
+        elif preordered_sources is not None:
+            # LLM Guided: consume in pre-ranked order, no per-step re-ranking
+            src_idx, table_name = remaining_sources.pop(0)
+            _step_gain = 0.0
+
+        elif llm_adaptive_callback is not None:
+            # LLM Adaptive: ask LLM at every step which source to pick next
+            if trace:
+                cov_now = trace[-1]["ucoverage_current"] if mode == "tvd-aa" else trace[-1]["ecoverage_current"]
+                pen_now = trace[-1]["penalty_current"]
+            else:
+                cov_now = 0.0
+                pen_now = 0.0
+            sel_start = time.perf_counter()
+            chosen = llm_adaptive_callback(remaining_sources, cov_now, pen_now, sources_explored, T)
+            processing_time_total += time.perf_counter() - sel_start
+            if chosen is None:
+                break  # LLM chose to stop
+            src_idx, table_name = chosen
+            remaining_sources = [(i, p) for (i, p) in remaining_sources if i != src_idx]
             _step_gain = 0.0
 
         elif stats is not None:
@@ -271,7 +300,7 @@ def Attribute_Match(
     if T is not None and not T.empty:
         prune_start = time.perf_counter()
         if mode == "tvd-caa":
-            T = CAAprune(T, UR)
+            T = CAAprune_v2(T, UR) if caa_prune_version == "v2" else CAAprune(T, UR)
         elif mode == "tvd-aa":
             T = UPrune(T, UR)
         else:

@@ -404,6 +404,75 @@ def CAAprune(T: pd.DataFrame, UR: dict) -> pd.DataFrame:
     return T_work.loc[selected].reset_index(drop=True)
 
 
+def CAAprune_v2(T: pd.DataFrame, UR: dict) -> pd.DataFrame:
+    """
+    CAAprune_v2 — matches the paper pseudocode exactly.
+
+    Greedy set-cover loop:
+      1. S_c = rows that cover at least one uncovered (a,v) pair.
+      2. S_1 = rows in S_c with the FEWEST uncovered req pairs
+               (min |uncovered ∩ req(row)|).
+      3. best = row in S_1 with the FEWEST overlap with seen_values
+               (min |values(row) ∩ seen_values|), where values(row)
+               includes ALL (req + unreq) attribute values in that row.
+      4. Add best to T', update uncovered and seen_values, repeat.
+
+    The old CAAprune above is kept for reference/comparison.
+    """
+    if T is None or T.empty:
+        return T
+
+    attrs   = list(UR.keys())
+    ur_sets = {a: set(vals) for a, vals in UR.items()}
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+    def req_set(row):
+        """(a,v) UR pairs present in this row."""
+        return frozenset(
+            (a, row[a]) for a in attrs
+            if a in row.index and row[a] in ur_sets[a]
+        )
+
+    def all_values(row):
+        """All non-NaN (a,v) pairs in this row (req + unreq)."""
+        return frozenset(
+            (a, row[a]) for a in row.index
+            if not pd.isna(row[a])
+        )
+
+    # ── initialise ────────────────────────────────────────────────────────────
+    T_work    = T.reset_index(drop=True).copy()
+    uncovered = {(a, v) for a, vals in UR.items() for v in vals}
+    seen_vals = set()
+    selected  = []
+
+    # pre-compute req and all_values for every row (avoid recomputing in loop)
+    row_req  = {idx: req_set(row)    for idx, row in T_work.iterrows()}
+    row_vals = {idx: all_values(row) for idx, row in T_work.iterrows()}
+    remaining = set(T_work.index)
+
+    # ── greedy loop ───────────────────────────────────────────────────────────
+    while uncovered and remaining:
+        # S_c: rows that still cover at least one uncovered pair
+        S_c = [i for i in remaining if row_req[i] & uncovered]
+        if not S_c:
+            break
+
+        # S_1: rows in S_c with fewest uncovered req pairs (min coverage count)
+        min_cov = min(len(row_req[i] & uncovered) for i in S_c)
+        S_1 = [i for i in S_c if len(row_req[i] & uncovered) == min_cov]
+
+        # best: among S_1, fewest overlap with seen_values
+        best = min(S_1, key=lambda i: len(row_vals[i] & seen_vals))
+
+        selected.append(best)
+        uncovered -= row_req[best]
+        seen_vals |= row_vals[best]
+        remaining.discard(best)
+
+    return T_work.loc[selected].reset_index(drop=True)
+
+
 def check_case(name, T, UR):
     uc0, _ = compute_ecoverage(T, UR)
     Tp = EPrune(T, UR)

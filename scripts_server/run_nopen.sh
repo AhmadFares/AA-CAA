@@ -12,7 +12,7 @@ source .venv/bin/activate
 
 mkdir -p logs
 
-BASE_ENV="JOB_TAG=nopen SPLIT_FILTER=random_20,low_penalty_20,candidates,low_penalty METHODS=AM"
+BASE_ENV="JOB_TAG=nopen SPLIT_FILTER=random_20,low_penalty_20,candidates,low_penalty METHODS=AM PYTHONUNBUFFERED=1"
 
 echo "=== Launching nopen (4 parallel processes, AM only) ==="
 

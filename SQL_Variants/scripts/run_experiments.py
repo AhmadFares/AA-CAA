@@ -16,6 +16,7 @@ from SQL_Variants.core.data_loading import load_ur
 from SQL_Variants.core.duckdb_connection import get_connection, register_parquet_view
 from SQL_Variants.scripts.generate_splits import dataset_from_ur_id
 from SQL_Variants.methods.AttributeMatch import Attribute_Match
+from SQL_Variants.methods.llm_selector import llm_rank_sources, llm_select_next_source
 
 from SQL_Variants.core.utils import (
     ur_df_to_dict,
@@ -51,15 +52,28 @@ def load_source_csv_paths(split_folder):
     ]
 
 def load_done_keys():
-    if not os.path.exists(SUMMARY_PATH):
+    # collect all summary.csv files across every job folder so that
+    # re-runs with a different JOB_TAG still skip already-completed variants
+    import glob
+    all_csvs = glob.glob(os.path.join("results", "*", "summary.csv"))
+    if not all_csvs:
         return set()
 
-    df = pd.read_csv(SUMMARY_PATH)
+    frames = []
+    for path in all_csvs:
+        try:
+            frames.append(pd.read_csv(path))
+        except Exception:
+            pass
+    if not frames:
+        return set()
+
+    df = pd.concat(frames, ignore_index=True).drop_duplicates()
     df["rewrite_sql"] = df["rewrite_sql"].astype(str).str.lower().isin(["true", "1", "yes"])
     df["UR_id"] = df["UR_id"].astype(int)
 
-
-    eps_col = df["eps"] if "eps" in df.columns else pd.Series([0.01] * len(df))
+    eps_col        = df["eps"]              if "eps"              in df.columns else pd.Series([0.01] * len(df))
+    prune_ver_col  = df["caa_prune_version"] if "caa_prune_version" in df.columns else pd.Series(["v1"]  * len(df))
     return set(
         zip(
             df["UR_id"],
@@ -71,10 +85,11 @@ def load_done_keys():
             df["theta"],
             df["rewrite_sql"],
             eps_col,
+            prune_ver_col,
         )
     )
 
-def is_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta, rewrite_sql, eps=0.01):
+def is_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta, rewrite_sql, eps=0.01, caa_prune_version="v1"):
     return (
         ur_id,
         dataset,
@@ -85,9 +100,10 @@ def is_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta, r
         theta,
         bool(rewrite_sql),
         eps,
+        caa_prune_version,
     ) in done_keys
 
-def mark_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta, rewrite_sql, eps=0.01):
+def mark_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta, rewrite_sql, eps=0.01, caa_prune_version="v1"):
     done_keys.add((
         ur_id,
         dataset,
@@ -98,6 +114,7 @@ def mark_done(done_keys, *, ur_id, dataset, split, mode, method, variant, theta,
         theta,
         bool(rewrite_sql),
         eps,
+        caa_prune_version,
     ))
 
 def write_steps(trace, meta):
@@ -152,11 +169,17 @@ def load_stats(split_path):
 def run_sql_method(con, method_func, UR, table_names, theta, stats=None,
                    mode="tvd-aa", trace_enabled=True,
                    all_source=False, rewrite_sql=False,
-                   alpha=0.7, beta=0.3, eps=0.01):
+                   alpha=0.7, beta=0.3, eps=0.01,
+                   preordered_sources=None,
+                   llm_adaptive_callback=None,
+                   caa_prune_version="v1"):
 
     extra = {}
     if method_func.__name__ == "Attribute_Match":
-        extra = {"alpha": alpha, "beta": beta, "eps": eps}
+        extra = {"alpha": alpha, "beta": beta, "eps": eps,
+                 "preordered_sources": preordered_sources,
+                 "llm_adaptive_callback": llm_adaptive_callback,
+                 "caa_prune_version": caa_prune_version}
     T_result, method_info = method_func(
         con, UR, table_names, theta,
         stats=stats, mode=mode, trace_enabled=trace_enabled,
@@ -210,9 +233,10 @@ def iter_split_paths(dataset_name: str, ur_id: int):
     ds = dataset_name.upper()
 
     allowed_prefixes = {
-        "MOVIELENS": {"random", "skewed", "low_penalty", "high_penalty", "low_coverage"},
+        "MOVIELENS": {"random", "skewed", "low_penalty", "high_penalty", "low_coverage", "geo"},
         "TUS": {"candidates", "low_penalty", "high_penalty", "low_coverage"},
         "CORDIS": {"candidates", "low_coverage"},
+        "MIMIC": {"admissions"},
     }
 
     if ds not in allowed_prefixes:
@@ -242,6 +266,12 @@ def iter_split_paths(dataset_name: str, ur_id: int):
 
     if ds == "MOVIELENS":
         for candidate in ("MOVIELENS", "MATHE", "MovieLens"):
+            dataset_root = os.path.join(base, candidate)
+            if os.path.isdir(dataset_root):
+                roots.append(dataset_root)
+                break
+    elif ds in ("CORDIS", "TUS", "MIMIC"):
+        for candidate in (ds, ds.capitalize(), ds.lower()):
             dataset_root = os.path.join(base, candidate)
             if os.path.isdir(dataset_root):
                 roots.append(dataset_root)
@@ -303,6 +333,9 @@ def run_one_variant(
     alpha=0.7,
     beta=0.3,
     eps=0.01,
+    preordered_sources=None,
+    llm_adaptive_callback=None,
+    caa_prune_version="v1",
 ):
 
     start = time.perf_counter()
@@ -321,6 +354,9 @@ def run_one_variant(
         alpha=alpha,
         beta=beta,
         eps=eps,
+        preordered_sources=preordered_sources,
+        llm_adaptive_callback=llm_adaptive_callback,
+        caa_prune_version=caa_prune_version,
     )
 
     
@@ -343,6 +379,7 @@ def run_one_variant(
         "method": method_name,
         "variant": variant_name,
         "rewrite_sql": bool(rewrite_sql),
+        "caa_prune_version": caa_prune_version,
         "sources_explored": method_info["sources_explored"],
         "shipping_time_total": method_info["shipping_time_total"],
         "shipping_rows_total": method_info["shipping_rows_total"],
@@ -389,6 +426,9 @@ def run_all_experiments(ur_subset=None):
     eps   = float(os.environ.get("EPS",  "0.01"))   # default / AA fixed value
     epsilons_env = os.environ.get("EPSILONS")        # CAA: loop over multiple eps values
     epsilons_caa = [float(e.strip()) for e in epsilons_env.split(",") if e.strip()] if epsilons_env else [eps]
+    caa_prune_version = os.environ.get("CAA_PRUNE_VERSION", "v1")
+    rewrite_sql_env = os.environ.get("REWRITE_SQL", "false").strip().lower()
+    rewrite_sql_values = [rewrite_sql_env in ("true", "1", "yes")]
     description = os.environ.get("DESC", "")
 
     # ---- Write manifest ----
@@ -457,14 +497,15 @@ def run_all_experiments(ur_subset=None):
                     for theta in thetas:
                         eps_loop = epsilons_caa if mode == "tvd-caa" else [eps]
                         for cur_eps in eps_loop:
-                            for rewrite_sql in (False,):
+                            for rewrite_sql in rewrite_sql_values:
 
                                 # 1) Random
                                 classic_results = []
                                 if not is_done(done_keys,
                                         ur_id=ur_id, dataset=dataset_name, split=split_name,
                                         mode=mode, method=method_name, variant="Random",
-                                        theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps):
+                                        theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps,
+                                        caa_prune_version=caa_prune_version):
 
                                     executed += 1
                                     for seed in GENERAL_CONFIG["seeds"]:
@@ -479,6 +520,7 @@ def run_all_experiments(ur_subset=None):
                                             n_sources=n_sources, stats_obj=None,
                                             all_source=False, rewrite_sql=rewrite_sql,
                                             log_steps=True, alpha=alpha, beta=beta, eps=cur_eps,
+                                            caa_prune_version=caa_prune_version,
                                         )
                                         classic_results.append(row_seed)
                                         if trace_seed:
@@ -503,7 +545,8 @@ def run_all_experiments(ur_subset=None):
                                     mark_done(done_keys,
                                         ur_id=ur_id, dataset=dataset_name, split=split_name,
                                         mode=mode, method=method_name, variant="Random",
-                                        theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps)
+                                        theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps,
+                                        caa_prune_version=caa_prune_version)
                                 else:
                                     skipped += 1
 
@@ -512,7 +555,8 @@ def run_all_experiments(ur_subset=None):
                                     if not is_done(done_keys,
                                             ur_id=ur_id, dataset=dataset_name, split=split_name,
                                             mode=mode, method=method_name, variant="Stats Guided",
-                                            theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps):
+                                            theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps,
+                                            caa_prune_version=caa_prune_version):
                                         executed += 1
                                         row_stat, trace_stat = run_one_variant(
                                             con=con,
@@ -524,6 +568,7 @@ def run_all_experiments(ur_subset=None):
                                             n_sources=n_sources, stats_obj=stats,
                                             all_source=False, rewrite_sql=rewrite_sql,
                                             log_steps=True, alpha=alpha, beta=beta, eps=cur_eps,
+                                            caa_prune_version=caa_prune_version,
                                         )
                                         append_row(row_stat)
                                         meta = {
@@ -536,42 +581,141 @@ def run_all_experiments(ur_subset=None):
                                         mark_done(done_keys,
                                             ur_id=ur_id, dataset=dataset_name, split=split_name,
                                             mode=mode, method=method_name, variant="Stats Guided",
-                                            theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps)
+                                            theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps,
+                                            caa_prune_version=caa_prune_version)
                                     else:
                                         skipped += 1
 
-                                # 3) AllSource baseline
-                                if rewrite_sql is False:
+                                # 3) LLM Guided (one API call pre-ranks sources)
+                                _llm_enabled = (os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+                                                or os.environ.get("LLM_BACKEND") in ("ollama", "llama_cpp"))
+                                if stats is not None and _llm_enabled:
                                     if not is_done(done_keys,
                                             ur_id=ur_id, dataset=dataset_name, split=split_name,
-                                            mode=mode, method=method_name, variant="All Source",
-                                            theta=theta, rewrite_sql=False, eps=cur_eps):
+                                            mode=mode, method=method_name, variant="LLM Guided",
+                                            theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps,
+                                            caa_prune_version=caa_prune_version):
                                         executed += 1
-                                        row_all, trace_all = run_one_variant(
+                                        # build pre-ranked source order (one LLM call)
+                                        # time it so we can add it to processing_time
+                                        all_srcs = list(enumerate(table_names))
+                                        llm_t0 = time.perf_counter()
+                                        llm_order = llm_rank_sources(
+                                            UR, all_srcs, stats, mode=mode
+                                        )
+                                        llm_call_time = time.perf_counter() - llm_t0
+                                        row_llm, trace_llm = run_one_variant(
                                             con=con,
                                             table_names=table_names,
                                             method_name=method_name,
-                                            variant_name="All Source",
+                                            variant_name="LLM Guided",
                                             ur_id=ur_id, UR=UR, theta=theta, mode=mode,
                                             dataset_name=dataset_name, split_name=split_name,
                                             n_sources=n_sources, stats_obj=None,
-                                            all_source=True, rewrite_sql=False,
+                                            all_source=False, rewrite_sql=rewrite_sql,
                                             log_steps=True, alpha=alpha, beta=beta, eps=cur_eps,
+                                            preordered_sources=llm_order,
+                                            caa_prune_version=caa_prune_version,
                                         )
-                                        append_row(row_all)
-                                        meta = {
+                                        # fold LLM API call time into processing + totals
+                                        row_llm["processing_time_total"] += llm_call_time
+                                        row_llm["method_time_total"]     += llm_call_time
+                                        row_llm["runtime_total"]         += llm_call_time
+                                        append_row(row_llm)
+                                        meta_llm = {
                                             "mode": mode, "UR_id": ur_id, "dataset": dataset_name,
                                             "split": split_name, "n_sources": n_sources,
                                             "theta": theta, "eps": cur_eps, "method": method_name,
-                                            "variant": "All Source", "rewrite_sql": False,
+                                            "variant": "LLM Guided", "rewrite_sql": bool(rewrite_sql),
                                         }
-                                        write_steps(trace_all, meta)
+                                        write_steps(trace_llm, meta_llm)
                                         mark_done(done_keys,
                                             ur_id=ur_id, dataset=dataset_name, split=split_name,
-                                            mode=mode, method=method_name, variant="All Source",
-                                            theta=theta, rewrite_sql=False, eps=cur_eps)
+                                            mode=mode, method=method_name, variant="LLM Guided",
+                                            theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps,
+                                            caa_prune_version=caa_prune_version)
                                     else:
                                         skipped += 1
+
+                                # 4) LLM Adaptive (one LLM call per step)
+                                if stats is not None and _llm_enabled:
+                                    if not is_done(done_keys,
+                                            ur_id=ur_id, dataset=dataset_name, split=split_name,
+                                            mode=mode, method=method_name, variant="LLM Adaptive",
+                                            theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps,
+                                            caa_prune_version=caa_prune_version):
+                                        executed += 1
+                                        _threshold = theta if mode == "tvd-aa" else cur_eps
+                                        def _make_adaptive_cb(_UR, _stats, _mode, _threshold):
+                                            def _cb(remaining, cov, pen, step, T=None):
+                                                return llm_select_next_source(
+                                                    _UR, remaining, _stats, _mode,
+                                                    cov, pen, _threshold, step, T=T)
+                                            return _cb
+                                        adaptive_cb = _make_adaptive_cb(UR, stats, mode, _threshold)
+                                        row_adp, trace_adp = run_one_variant(
+                                            con=con,
+                                            table_names=table_names,
+                                            method_name=method_name,
+                                            variant_name="LLM Adaptive",
+                                            ur_id=ur_id, UR=UR, theta=theta, mode=mode,
+                                            dataset_name=dataset_name, split_name=split_name,
+                                            n_sources=n_sources, stats_obj=None,
+                                            all_source=False, rewrite_sql=rewrite_sql,
+                                            log_steps=True, alpha=alpha, beta=beta, eps=cur_eps,
+                                            llm_adaptive_callback=adaptive_cb,
+                                            caa_prune_version=caa_prune_version,
+                                        )
+                                        append_row(row_adp)
+                                        meta_adp = {
+                                            "mode": mode, "UR_id": ur_id, "dataset": dataset_name,
+                                            "split": split_name, "n_sources": n_sources,
+                                            "theta": theta, "eps": cur_eps, "method": method_name,
+                                            "variant": "LLM Adaptive", "rewrite_sql": bool(rewrite_sql),
+                                        }
+                                        write_steps(trace_adp, meta_adp)
+                                        mark_done(done_keys,
+                                            ur_id=ur_id, dataset=dataset_name, split=split_name,
+                                            mode=mode, method=method_name, variant="LLM Adaptive",
+                                            theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps,
+                                            caa_prune_version=caa_prune_version)
+                                    else:
+                                        skipped += 1
+
+                                # 5) AllSource baseline
+                                if not is_done(done_keys,
+                                        ur_id=ur_id, dataset=dataset_name, split=split_name,
+                                        mode=mode, method=method_name, variant="All Source",
+                                        theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps,
+                                        caa_prune_version=caa_prune_version):
+                                    executed += 1
+                                    row_all, trace_all = run_one_variant(
+                                        con=con,
+                                        table_names=table_names,
+                                        method_name=method_name,
+                                        variant_name="All Source",
+                                        ur_id=ur_id, UR=UR, theta=theta, mode=mode,
+                                        dataset_name=dataset_name, split_name=split_name,
+                                        n_sources=n_sources, stats_obj=None,
+                                        all_source=True, rewrite_sql=rewrite_sql,
+                                        log_steps=True, alpha=alpha, beta=beta, eps=cur_eps,
+                                        caa_prune_version=caa_prune_version,
+                                    )
+                                    append_row(row_all)
+                                    meta = {
+                                        "mode": mode, "UR_id": ur_id, "dataset": dataset_name,
+                                        "split": split_name, "n_sources": n_sources,
+                                        "theta": theta, "eps": cur_eps, "method": method_name,
+                                        "variant": "All Source", "rewrite_sql": bool(rewrite_sql),
+                                    }
+                                    write_steps(trace_all, meta)
+                                    mark_done(done_keys,
+                                        ur_id=ur_id, dataset=dataset_name, split=split_name,
+                                        mode=mode, method=method_name, variant="All Source",
+                                        theta=theta, rewrite_sql=rewrite_sql, eps=cur_eps,
+                                        caa_prune_version=caa_prune_version)
+                                else:
+                                    skipped += 1
                     con.close()
 
     print("\n=== Finished ALL experiments ===")

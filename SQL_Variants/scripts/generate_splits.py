@@ -85,8 +85,9 @@ def generate_stats(folder, UR_df):
     print(f"    → Stats missing in {folder}, generating stats...")
     
 
-    csv_files = sorted([f for f in os.listdir(folder) if f.endswith(".csv")])
-    sources_list = [pd.read_csv(os.path.join(folder, f), low_memory=False) for f in csv_files]
+    import glob as _glob
+    _pq_files = sorted(_glob.glob(os.path.join(folder, "src_*.parquet")))
+    sources_list = [pd.read_parquet(f) for f in _pq_files]
 
     value_index, source_vectors = compute_UR_value_frequencies_in_sources(sources_list, UR_df)
 
@@ -266,6 +267,12 @@ def dataset_from_ur_id(ur_id: int) -> str:
         return "TUS"
     if 51 <= ur_id <= 70:
         return "CORDIS"
+    if 100 <= ur_id <= 240:
+        return "MOVIELENS"   # scalability (101-120) + auto-geo (201-240)
+    if 301 <= ur_id <= 340:
+        return "CORDIS"      # auto-cordis (301-340)
+    if 401 <= ur_id <= 440:
+        return "MIMIC"       # auto-mimic (401-440)
     return "UNKNOWN"
 
 

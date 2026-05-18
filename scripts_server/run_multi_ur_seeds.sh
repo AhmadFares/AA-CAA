@@ -12,7 +12,7 @@ source .venv/bin/activate
 
 mkdir -p logs
 
-BASE_ENV="JOB_TAG=multi_ur_seeds SPLIT_FILTER=random_20,low_penalty_20,candidates,low_penalty"
+BASE_ENV="JOB_TAG=multi_ur_seeds SPLIT_FILTER=random_20,low_penalty_20,candidates,low_penalty PYTHONUNBUFFERED=1"
 
 echo "=== Launching multi_ur_seeds (4 parallel processes) ==="
 
