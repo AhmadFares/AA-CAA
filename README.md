@@ -65,11 +65,23 @@ bash scripts_server/run_all_experiments.sh
 ```
 
 This runs the non-LLM variants (TVD, Random, All Source) by default.
-To also run the LLM-guided variants, provide a Groq API key:
+To also run the LLM-guided variants, an LLM backend is required.
+The experiments in the paper were run with **Ollama** (local, no API key needed):
 
 ```bash
-LLM_API_KEY=gsk_... bash scripts_server/run_all_experiments.sh
+# install Ollama from https://ollama.com, then:
+ollama pull llama3.1
+LLM_BACKEND=ollama bash scripts_server/run_all_experiments.sh
 ```
+
+If Ollama is not available, **Groq** (free API key at [https://console.groq.com](https://console.groq.com)) is a drop-in alternative:
+
+```bash
+LLM_BACKEND=groq LLM_API_KEY=gsk_... bash scripts_server/run_all_experiments.sh
+```
+
+Other supported backends: `gemini` (requires `LLM_API_KEY`) and `llama_cpp` (requires `LLAMA_CPP_MODEL_PATH`).
+See `SQL_Variants/methods/llm_selector.py` for details.
 
 Results are written to `results/` as `steps.csv` and `summary.csv` per run.
 
