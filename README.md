@@ -1,190 +1,125 @@
-# TVD
+# TVD: Tuple-Value Discovery
 
-## Codebase Overview
+Code for the paper **"Tuple-Value Discovery"** (TVD-AA and TVD-CAA algorithms).
 
-This repository contains the **experimental and algorithmic code** for running
-**Tuple-Value Discovery (TVD)** methods and evaluating them under different source
-construction settings.
+---
 
-The code is organized around:
+## Requirements
 
-* TVD algorithms,
-* SQL-based query strategies,
-* source construction utilities,
-* experiment runners.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+---
+
+## Data Setup
+
+Experiments use three datasets. Download instructions for each are below.
+Place all raw files under `data/raw/` as described.
+
+### MovieLens
+
+1. Download **MovieLens 1M** from [https://grouplens.org/datasets/movielens/1m/](https://grouplens.org/datasets/movielens/1m/)
+2. Extract `ratings.dat`, `users.dat`, `movies.dat` into `data/raw/Movie_Lens/`
+3. Build the geo split:
+   ```bash
+   python scripts_server/generate_movielens_geo_split.py
+   ```
+   This creates `data/generated_splits/MovieLens/geo/` (60 sources, split by zip-code region).
+
+### CORDIS
+
+1. Download the H2020 projects CSV from [https://cordis.europa.eu/datalab/](https://cordis.europa.eu/datalab/)
+   - Look for **H2020 projects** → export as CSV
+2. Pre-split by coordinator country and place files as `data/raw/cordis/src_1.csv` … `src_26.csv`
+   (use `data/raw/cordis/country_index.csv` in this repo for the country-to-source mapping)
+3. Build the candidates split:
+   ```bash
+   python scripts_server/build_cordis_splits.py
+   ```
+   This creates `data/generated_splits/CORDIS/candidates/` (26 sources, one per country).
+
+### MIMIC-IV
+
+Access requires credentialing via PhysioNet:
+[https://physionet.org/content/mimiciv/](https://physionet.org/content/mimiciv/)
+
+Once you have access:
+1. Download `admissions.csv` and `diagnoses_icd.csv` and place them under `data/mimic_iv/`
+2. Build the split:
+   ```bash
+   python scripts_server/generate_mimic_split.py
+   ```
+   This creates `data/generated_splits/MIMIC/admissions/` (90 sources, split by admission location × decade).
+
+---
+
+## Running Experiments
+
+All paper experiments (TVD-AA and TVD-CAA on all three datasets) are run with:
+
+```bash
+bash scripts_server/run_all_experiments.sh
+```
+
+This runs the non-LLM variants (TVD, Random, All Source) by default.
+To also run the LLM-guided variants, provide a Groq API key:
+
+```bash
+LLM_API_KEY=gsk_... bash scripts_server/run_all_experiments.sh
+```
+
+Results are written to `results/` as `steps.csv` and `summary.csv` per run.
+
+**UR ranges:** MovieLens geo: 201–240 · CORDIS: 301–340 · MIMIC-IV: 401–440
+
+---
+
+## Reproducing Figures
+
+All figure scripts are under `scripts_server/` and read from `results/`.
+Run from the repo root:
+
+```bash
+# AA trajectory figure (Figure X in the paper)
+python scripts_server/plot_paper_aa_with_prune.py
+
+# CAA trajectory figure
+python scripts_server/plot_paper_caa_with_prune.py
+
+# Timing comparison figure
+python scripts_server/plot_timing_comparison.py
+
+# LLM variants — AA
+python scripts_server/plot_paper_aa_llm.py
+
+# LLM variants — CAA
+python scripts_server/plot_paper_caa_llm.py
+```
+
+Output PDFs and PNGs are saved to `results/paper_plots/`.
 
 ---
 
 ## Repository Structure
 
-### Core logic
-
-* `sql_builders.py`  
-  SQL query construction utilities (fixed and rewritten queries).
-
-* `utils.py`  
-  Shared helpers: UR parsing, coverage, penalty, pruning utilities, logging helpers.
-
-* `Source_Constructors.py`  
-  Functions to generate synthetic source tables (random, skewed, high-penalty,
-  low-coverage, etc.).
-
----
-
-### SQL_Variants/
-
-Main implementation of TVD variants and execution pipeline.
-
-* `SQL_Variants/core/`  
-  Core components shared by all methods (SQL builders, utilities, execution helpers).
-
-* `SQL_Variants/methods/`  
-  TVD methods (e.g., AttributeMatch, TupleMatch).
-
-* `SQL_Variants/scripts/`  
-  Entry-point scripts for running experiments and sanity checks.
-
----
-
-### Scripts (root level)
-
-* `generate_splits.py`  
-  Generates source tables from a base dataset (MovieLens-1M).  
-  **Must be run first.**
-
-* `generate_splits_tus.py`  
-  Generates source tables from a base dataset (TUS).  
-  **Must be run first.**
-  
-* `Check1.py`  
-  Runs a **single UR** against generated sources (debug / sanity check).
-  The UR, dataset, and execution parameters are configured in `GENERAL_CONFIG`.
-
-* `run_experiments.py`  
-  Runs **full experimental sweeps** (multiple URs, splits, configurations).
-  All experiment settings (datasets, URs, variants, thresholds, modes) are defined
-  in `GENERAL_CONFIG`.
-
----
-
-## How to Run
-
-## Data setup (TUS)
-
-This repository uses a processed subset of the **TUS-small dataset** for experiments.
-
-We select 20 queries from TUS and reduce them to user requests (URs), resulting in
-**UR21–UR40** (see `helpers/test_cases`).  
-For each UR, only candidate tables whose schema fully contains the UR attributes are
-retained, leading to a variable number of candidates per UR.
-
-The resulting candidate tables are provided as a GitHub Release asset.
-
-### Download and extract candidates
-
-From the repository root:
-
 ```
-tar -xzf tus_candidates_UR21-UR40.tar.gz
-````
+SQL_Variants/
+  methods/AttributeMatch.py   # TVD-AA and TVD-CAA algorithms
+  scripts/run_experiments.py  # experiment entry point
+  scripts/generate_splits.py  # split loading utilities
 
-This creates:
+helpers/
+  test_cases.py               # UR definitions (URs 201–440)
+  auto_ur_generator.py        # automatic UR generation from split statistics
+  llm_selector.py             # LLM-guided source selection
 
+scripts_server/
+  run_all_experiments.sh      # run all paper experiments
+  generate_*_split.py         # dataset-specific split builders
+  rebuild_split_stats.py      # recompute source statistics
+  plot_paper_*.py             # figure scripts
+  plot_timing_comparison.py   # timing figure
 ```
-data/tus_20_selected/candidates/UR21 … UR40
-```
-
-### Generate experimental source splits
-
-```
-PYTHONPATH=$PWD python SQL_Variants/scripts/generate_splits_tus.py
-```
-
-For each UR, this produces the following folders under
-`data/generated_splits/UR{ur}/`:
-
-```
-candidates/    # unchanged sources
-low_penalty/   # low-penalty variants
-high_penalty/  # high-penalty variants
-low_coverage/  # low-coverage variants
-```
-
----
-
-## Data setup (MovieLens)
-
-We use a **preprocessed version of MovieLens-1M**, where the original MovieLens tables
-(`ratings`, `users`, `movies`) are joined into a **single relational table**.
-
-The resulting table contains the following columns:
-
-```
-UserID, MovieID, Rating, Timestamp,
-Gender, Age, Occupation, Zip-code,
-Title, Genres
-```
-
-This unified table is the input used by all MovieLens-based TVD experiments.
-
-The processed MovieLens table is provided as a GitHub Release asset
-(`movielens_1m.csv.tar.gz`).
-
-From the repository root, extract the archive:
-
-```
-tar -xzf movielens_1m.csv.tar.gz
-```
-
-### Generate source tables (MovieLens)
-
-```
-python generate_splits.py
-```
-
-This generates synthetic source tables from the unified MovieLens table, according
-to the configured source construction strategies and each UR.
-
----
-
-### Run a single UR (debug / inspection)
-
-```
-python Check1.py
-```
-
-Outputs:
-
-* constructed table,
-* coverage,
-* penalty,
-* runtime statistics.
-
----
-
-### Run full experiments
-
-```
-python run_experiments.py
-```
-
-Runs all configured experiments and logs metrics for analysis.
-
----
-
-## Notes
-
-* This codebase focuses on **TVD methods only**.
-
----
-
-## Intended Use
-
-This repository is intended for:
-
-* reproducing experiments,
-* running controlled evaluations of TVD strategies,
-* extending or modifying offline TVD algorithms.
-
-It is **not** intended as a packaged library or end-user tool.
-
