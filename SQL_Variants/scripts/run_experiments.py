@@ -233,7 +233,8 @@ def iter_split_paths(dataset_name: str, ur_id: int):
     ds = dataset_name.upper()
 
     allowed_prefixes = {
-        "MOVIELENS": {"random", "skewed", "low_penalty", "high_penalty", "low_coverage", "geo"},
+        "MOVIELENS": {"random", "skewed", "low_penalty", "high_penalty", "low_coverage",
+                      "geo", "geo_10", "geo_100", "geo_1000"},
         "TUS": {"candidates", "low_penalty", "high_penalty", "low_coverage"},
         "CORDIS": {"candidates", "low_coverage"},
         "MIMIC": {"admissions"},
@@ -247,7 +248,8 @@ def iter_split_paths(dataset_name: str, ur_id: int):
         allowed = allowed_prefixes[ds]
 
         parts = split_folder_name.split("_")
-        if parts[-1].isdigit() and int(parts[-1]) not in SOURCE_NUMBERS:
+        # Only apply source-number filter when SOURCE_NUMBERS is explicitly set
+        if SOURCE_NUMBERS and parts[-1].isdigit() and int(parts[-1]) not in SOURCE_NUMBERS:
             return False
 
         if split_folder_name in allowed:
