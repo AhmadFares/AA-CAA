@@ -6,7 +6,7 @@ This file documents the prompts used by the two LLM variants (**LLM-Guided** and
 
 ## LLM-Guided
 
-A **single prompt** is issued at the start of exploration. The model receives the user request (UR) and per-source statistics, and returns a ranked list of all sources. Sources are then explored in that fixed order.
+A **single prompt** is issued at the start of exploration. The model receives the query (UR) and per-source statistics, and returns a ranked list of all sources. Sources are then explored in that fixed order.
 
 **System message:**
 ```
@@ -21,10 +21,10 @@ You are a data discovery expert.
 Goal: find rows where ALL requested attribute values appear together in the SAME row
 (co-occurrence).
 A row is useful only if it simultaneously satisfies one value from EACH attribute.
-For example, if the request is {illness: [flu, cold], symptom: [fever]}, a good row
+For example, if the query is {illness: [flu, cold], symptom: [fever]}, a good row
 has illness=flu AND symptom=fever in the same row — not just one of them.
 
-User Request:
+query:
   <attribute>: [<value>, ...]
   ...
 
@@ -47,12 +47,12 @@ Example format: [3, 0, 5, 1, 2, 4]
 You are a data discovery expert.
 
 Goal: find rows that touch AT LEAST ONE requested value per attribute,
-while also containing as many values NOT in the request as possible
+while also containing as many values NOT in the query as possible
 (diverse, complementary data).
 Rows that partially match (some attributes match, others do not) are preferred
 over rows that fully match all attributes.
 
-User Request:
+query:
   <attribute>: [<value>, ...]
   ...
 
@@ -94,10 +94,10 @@ You are a data discovery expert guiding an adaptive exploration of data sources.
 Goal: find rows where ALL requested attribute values appear together in the SAME row
 (co-occurrence).
 A row is useful only if it simultaneously satisfies one value from EACH attribute.
-For example, if the request is {illness: [flu, cold], symptom: [fever]}, a good row
+For example, if the query is {illness: [flu, cold], symptom: [fever]}, a good row
 has illness=flu AND symptom=fever in the same row — not just one of them.
 
-User Request:
+query:
   <attribute>: [<value>, ...]
   ...
 
@@ -133,18 +133,18 @@ Example: {"next": 3}
 You are a data discovery expert guiding an adaptive exploration of data sources.
 
 Goal: find rows that touch AT LEAST ONE requested value per attribute,
-while also containing as many values NOT in the request as possible
+while also containing as many values NOT in the query as possible
 (diverse, complementary data).
 Rows that partially match (some attributes match, others do not) are preferred
 over rows that fully match all attributes.
 
-User Request:
+query:
   <attribute>: [<value>, ...]
   ...
 
 Current state after <k> sources explored:
   E-Coverage = <value>  (fraction of requested values found)
-  Penalty    = <value>  (fraction of found values that are NOT in the request — higher is better)
+  Penalty    = <value>  (fraction of found values that are NOT in the query — higher is better)
   ε = <threshold>  (stop when both stop improving by more than ε)
 
 Current result table T summary:
