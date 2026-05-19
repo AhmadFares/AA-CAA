@@ -6,7 +6,7 @@ This file documents the prompts used by the two LLM variants (**LLM-Guided** and
 
 ## LLM-Guided
 
-A **single prompt** is issued at the start of exploration. The model receives the query (UR) and per-source statistics, and returns a ranked list of all sources. Sources are then explored in that fixed order.
+A **single prompt** is issued at the start of exploration. The model receives the query and per-source statistics, and returns a ranked list of all sources. Sources are then explored in that fixed order.
 
 **System message:**
 ```
@@ -79,7 +79,7 @@ Example format: [3, 0, 5, 1, 2, 4]
 
 ## LLM-Adaptive
 
-**One prompt per exploration step.** The model receives the UR, remaining sources, current coverage/penalty state, and a summary of the result table built so far. It picks the single best next source, or returns `-1` to stop early.
+**One prompt per exploration step.** The model receives the query, remaining sources, current coverage/penalty state, and a summary of the result table built so far. It picks the single best next source, or returns `-1` to stop early.
 
 **System message:**
 ```
